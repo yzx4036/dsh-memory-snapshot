@@ -1,0 +1,6 @@
+# 本地验证材料（含绝对路径，不入库）
+verify-overlay.yml
+test-memory.md
+
+# Node
+node_modules/

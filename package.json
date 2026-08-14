@@ -1,0 +1,14 @@
+{
+  "name": "dsh-memory-snapshot",
+  "version": "0.1.0",
+  "description": "Zero-dependency DeepSeek Harness plugin: inject local markdown/text files into every session's system prompt as lightweight memory.",
+  "type": "module",
+  "main": "index.js",
+  "files": ["index.js", "README.md", "LICENSE"],
+  "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "memory", "cordis"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yzx4036/dsh-memory-snapshot"
+  }
+}
