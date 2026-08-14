@@ -84,9 +84,10 @@ function loadSnapshot(filePaths, maxBytes) {
   return parts.join('\n\n') + (errors.length ? `\n\n(部分文件读取失败: ${errors.join('; ')})` : '')
 }
 
-export function apply(ctx) {
-  // ctx.plugin.config is the validated config (post standard-schema)
-  const cfg = ctx.plugin?.config ?? DEFAULTS
+export function apply(ctx, config) {
+  // Cordis object plugins receive config as the SECOND argument (apply(ctx, config)).
+  // ctx.plugin?.config is kept as a fallback for environments that expose it there.
+  const cfg = { ...DEFAULTS, ...(config ?? ctx.plugin?.config ?? {}) }
   const files = cfg.files
   const maxBytes = cfg.maxBytes
   const order = cfg.order
