@@ -1,87 +1,101 @@
 # dsh-memory-snapshot
 
-Zero-dependency [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin:
-inject a snapshot of your local markdown/text files into **every session's system prompt** as lightweight long-term memory.
+零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）插件：把本地 markdown/文本文件的快照注入**每一次会话的系统提示词**，作为轻量级长期记忆。
 
-> ⚠️ dsh is in developer preview (v0.1.0-rc.x). Plugin APIs may change across releases — check [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases) when upgrading.
+> ⚠️ dsh 处于开发者预览阶段（v0.1.0-rc.x）。插件 API 可能随版本破坏性变更，升级前留意 [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases)。
 
-## Why
+## 为什么
 
-dsh's official memory story is MCP-backed third-party servers ([Memorix](https://github.com/AVIDS2/memorix), [Engram](https://github.com/Gentleman-Programming/engram), [MCP Reference Memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)) — all default-off, not endorsed by DeepSeek, and each requires installing a server, a database, or a model account.
+dsh 官方的记忆方案是 MCP 接入第三方服务（[Memorix](https://github.com/AVIDS2/memorix)、[Engram](https://github.com/Gentleman-Programming/engram)、[MCP Reference Memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)）——全部默认关闭、官方明确不背书，而且每个都要安装服务端/数据库/模型账户。
 
-This plugin covers the simplest need: **read the markdown files you already have**. No server. No database. No model. No account. Point it at `MEMORY.md`, `NOTES.md`, a knowledge base — done.
+这个插件覆盖最朴素的需求：**读你已经有的 markdown 文件**。不需要服务端、不需要数据库、不需要模型、不需要账户。指向 `MEMORY.md`、`NOTES.md`、知识库——完事。
 
-### Why a plugin? dsh can already read markdown.
+### 为什么要插件？dsh 自己就能读 markdown。
 
-Fair question. `dsh` ships `read`/`glob` tools — you can always prompt it "read ~/MEMORY.md". The difference is **who decides memory gets consumed**:
+问得好。dsh 自带 `read`/`glob` 工具，你随时可以提示它「读一下 ~/MEMORY.md」。差别在于**谁来决定记忆被消费**：
 
-| | Without plugin (passive) | With plugin (active) |
+| | 不用插件（被动） | 用插件（主动） |
 |---|---|---|
-| Memory present | Only if you prompt it, or the model happens to decide | **Always in the system prompt**, every session |
-| Headless / automation calls | No human to say "check your memory" | Memory is there by default — no caller change needed |
-| Workspace scope | AGENTS.md auto-load is **workspace-local** (and only a low-level user-role reminder, verified empirically) | Plugin can point at **any path**, outside the workspace |
-| Cost per task | Extra tool-call round-trips, model-dependent read depth | Fixed snapshot, `maxBytes`-capped, uniform in Trajectory |
-| Reliability | Model may skim 200 bytes and go | Complete controlled snapshot every time |
+| 记忆在场 | 只有你提示它，或模型碰巧决定读 | **每次会话都无条件在系统提示词里** |
+| headless / 自动化调用 | 没有人在中间说「查一下记忆」 | 记忆默认在场，调用方零改动 |
+| 工作区范围 | AGENTS.md 自动加载**只限工作区内**（且只是 user 层低级别 reminder，实机验证过） | 插件可指向**任意路径**，工作区之外也行 |
+| 每次任务成本 | 多一轮工具调用往返，读多读少看模型心情 | 固定快照，`maxBytes` 截断，Trajectory 里格式统一 |
+| 可靠性 | 模型可能只扫 200 字节就开干 | 每次都是完整可控的快照 |
 
-So this plugin is not about adding read capability — dsh already has it. It's about making memory **"always present" instead of "possibly remembered"**. The main battlefield is unattended scenarios: headless batches, automation pipelines, multi-agent flows, where no human is around to say "check your memory". If you only ever drive dsh interactively and remember to prompt it, the plugin's value is small — that's an honest trade-off.
+所以这个插件不是给 dsh 加「读文件能力」——它本来就有。而是把记忆从**「可能被想起」变成「必然在场」**。主战场是无人值守场景：headless 批量、自动化流水线、多 agent 协作——这些地方没有人类在中间说「查一下记忆」。如果你只交互式使用 dsh 且记得每次提示它，这插件的价值有限——这是诚实的取舍。
 
-## Install
+## 安装
 
-The plugin is a single ESM file. No npm install needed.
+### 一键安装（推荐）
 
-1. Copy `index.js` anywhere on disk (e.g. `~/.dsh/plugins/dsh-memory-snapshot/index.js`).
-2. Add a patch entry to your profile or home patch layer:
+```bash
+node install.mjs                    # 装到 home 层，所有 profile 生效
+node install.mjs --profile headless # 只装到指定 profile
+node install.mjs --files A.md,B.md  # 同时配置初始记忆文件
+node install.mjs --yes              # 跳过确认
+node install.mjs --verify           # 装完自动跑 dsh --dump-config 校验
+```
 
-   `~/.dsh/cordis.patch.yml` (all profiles) or `~/.dsh/profiles/<name>/cordis.patch.yml` (one profile):
+脚本会自动：
+1. **定位 DSH_HOME**（`$DSH_HOME` 环境变量 → 回退 `~/.dsh`）
+2. 复制 `index.js` + `package.json`（ESM 声明）到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
+3. **合并** cordis patch——绝不覆盖你已有内容：空文件直接写、有内容追加、已装过跳过（幂等）
 
-   ```yaml
-   - insert:
-       - id: memory-snapshot
-         name: 'file:///C:/path/to/dsh-memory-snapshot/index.js'
-         config:
-           files:
-             - '~/MEMORY.md'
-             - 'C:/Proj/notes/context.md'
-           maxBytes: 3000
-           order: 50
-           marker: 'MEMORY-SNAPSHOT'
-   ```
+### 手动安装
 
-3. Run `dsh --profile headless --dump-config` and confirm the `memory-snapshot` entry appears.
+1. 把 `index.js` 复制到任意位置（如 `~/.dsh/plugins/dsh-memory-snapshot/index.js`）
+2. 在 `~/.dsh/cordis.patch.yml`（所有 profile）或 `~/.dsh/profiles/<name>/cordis.patch.yml`（单 profile）加：
 
-## Config
+```yaml
+- insert:
+    - id: memory-snapshot
+      name: 'file:///C:/path/to/dsh-memory-snapshot/index.js'
+      config:
+        files:
+          - '~/MEMORY.md'
+          - 'C:/Proj/notes/context.md'
+        maxBytes: 3000
+        order: 50
+        marker: 'MEMORY-SNAPSHOT'
+```
 
-| Key | Default | Description |
+3. 运行 `dsh --profile headless --dump-config` 确认 `memory-snapshot` 出现
+
+## 配置
+
+| 键 | 默认值 | 说明 |
 |---|---|---|
-| `files` | `['./MEMORY.md']` | Array of file paths to read. `~` expands to home. Relative paths resolve against cwd. |
-| `maxBytes` | `3000` | Per-file byte cap before injection (protects system prompt size). |
-| `order` | `50` | `systemPrompt.section` order — lower = earlier in prompt. |
-| `marker` | `MEMORY-SNAPSHOT` | Marker text prefix (`<marker>-MARKER:` appears before the snapshot). |
+| `files` | `['./MEMORY.md']` | 要读取的文件路径数组。`~` 展开为 home；相对路径按 cwd 解析 |
+| `maxBytes` | `3000` | 每个文件注入前的字节上限（保护系统提示词体积） |
+| `order` | `50` | `systemPrompt.section` 顺序——越小越靠前 |
+| `marker` | `MEMORY-SNAPSHOT` | 标记文本前缀（快照前出现 `<marker>-MARKER:`） |
 
-Files that fail to read are reported inside the injected section instead of crashing the session. All paths support `~`.
+读取失败的文件会在注入段里标注原因，而不是让会话崩溃。所有路径支持 `~`。
 
-## How it works
+## 工作原理
 
-The plugin implements the Cordis plugin contract:
+插件实现 Cordis 插件契约：
 
-- `export const inject = ['systemPrompt']` — declares the section injection point
-- `export const Config = { '~standard': { validate } }` — **zero-dependency** Standard Schema config validation (no zod), matching what Cordis expects via `Config['~standard'].validate(config)`
-- `apply(ctx)` reads `ctx.plugin.config` (validated), loads each file (UTF-8, truncated to `maxBytes`), and registers a `systemPrompt.section`
+- `export const inject = ['systemPrompt']` — 声明注入点
+- `export const Config = { '~standard': { validate } }` — **零依赖** Standard Schema 配置校验（不引入 zod），匹配 Cordis 的 `Config['~standard'].validate(config)` 约定
+- `apply(ctx, config)` — **config 作为第二个参数传入**（Cordis 对象插件约定，实测 `ctx.plugin.config` 取不到），读取每个文件（UTF-8、按 `maxBytes` 截断），注册 `systemPrompt.section`
 
-The snapshot appears in the session's Trajectory log (`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`, event `request/header` `system` field) — so you can always audit exactly what the model received.
+快照会出现在会话的 Trajectory 日志里（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，`request/header` 事件的 `system` 字段）——模型到底收到什么，永远可审计。
 
-## Verify
+## 验证
 
 ```sh
-# 1. write/read: run a session and confirm the marker is injected
-dsh --profile headless "What is in your memory snapshot?"   # answer references your files
+# 1. 写入/读取：跑一个会话确认 marker 注入
+dsh --profile headless "你的记忆快照里有什么？"   # 回答应引用你的文件
 
-# 2. fresh-session recall: new session, ask something only your file knows
-dsh --profile headless "According to memory, what is <fact in your file>?"
+# 2. 新会话回忆：新开会话，问只有你文件里才知道的事
+dsh --profile headless "根据记忆，<你文件里的事实>是什么？"
 
-# 3. audit: decode the latest trajectory and see the snapshot in request/header.system
+# 3. 审计：解码最新轨迹，在 request/header.system 里看到快照
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — 见 [LICENSE](LICENSE)。
+
+[English](README.en.md)
