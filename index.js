@@ -7,17 +7,26 @@
 // This plugin covers the simplest need: "read files I already have" — no
 // server, no database, no model, no account.
 //
-// Config (via cordis patch overlay):
+// Plugin contract (official standard):
+//   - Function form: export { name, inject, apply } — see
+//     docs/user/develop/basic/index.md ("Your first plugin").
+//   - Config is the SECOND argument of apply(ctx, config) — object/function
+//     plugins receive it there, not via ctx.plugin.config.
+//   - Config schema: Cordis checks `Config["~standard"].validate`. zod and
+//     Schemastery are convenience wrappers over that same interface; this
+//     plugin implements it directly to stay dependency-free. The schema fills
+//     defaults, so apply() receives a fully-populated config.
+//   - section(): registers an ordered systemPrompt section (see
+//     docs/user/develop/basic/config.md and packages/core/system-prompt).
+//
+// Config (via cordis.patch.yml):
 //   - id: memory-snapshot
-//     name: '<path-to-this-plugin>/index.js'     # or file:///...
+//     name: '<path-to-this-plugin>/index.js'      # or file:///...
 //     config:
 //       files: ['./MEMORY.md', '~/notes/context.md']  # paths, ~ supported
 //       maxBytes: 3000          # per-file cap before injection
-//       order: 50               # systemPrompt section order
+//       order: 50               # systemPrompt section order (persona=0, tools=100-199)
 //       marker: 'MEMORY-SNAPSHOT'  # marker text before the snapshot
-//
-// Cordis config schema: standard-schema interface (`Config["~standard"].validate`).
-// This plugin implements it by hand (zero dependency) instead of pulling in zod.
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
@@ -32,28 +41,36 @@ const DEFAULTS = {
   marker: 'MEMORY-SNAPSHOT',
 }
 
-// ---- Standard Schema compatible Config (zero-dep) ----
+// ---- Hand-written Standard Schema Config (zero-dep) ----
+// Cordis validates config via `Config["~standard"].validate(value)`. This is
+// the same interface zod / @deepseek-ai/schemastery implement internally, so
+// a primitive (valid) schema here needs no external dependency. Per the
+// official "Fail loudly on invalid configuration" principle, invalid input
+// returns issues at load time instead of silently misbehaving later.
 export const Config = {
   '~standard': {
     version: 1,
     vendor: 'dsh-memory-snapshot',
     validate(value) {
       const issues = []
-      if (value === undefined || value === null) value = {}
-      if (!Array.isArray(value.files ?? DEFAULTS.files)) {
+      const input = value === undefined || value === null ? {} : value
+      if (!Array.isArray(input.files ?? DEFAULTS.files)) {
         issues.push({ message: 'files must be an array of paths', path: ['files'] })
+      } else if (input.files.some(f => typeof f !== 'string')) {
+        issues.push({ message: 'every file path must be a string', path: ['files'] })
       }
-      if (value.maxBytes !== undefined && (typeof value.maxBytes !== 'number' || value.maxBytes <= 0)) {
-        issues.push({ message: 'maxBytes must be a positive number', path: ['maxBytes'] })
+      if (input.maxBytes !== undefined && (typeof input.maxBytes !== 'number' || !Number.isFinite(input.maxBytes) || input.maxBytes <= 0)) {
+        issues.push({ message: 'maxBytes must be a positive finite number', path: ['maxBytes'] })
       }
-      if (value.order !== undefined && typeof value.order !== 'number') {
-        issues.push({ message: 'order must be a number', path: ['order'] })
+      if (input.order !== undefined && (typeof input.order !== 'number' || !Number.isFinite(input.order))) {
+        issues.push({ message: 'order must be a finite number', path: ['order'] })
       }
-      if (value.marker !== undefined && typeof value.marker !== 'string') {
+      if (input.marker !== undefined && typeof input.marker !== 'string') {
         issues.push({ message: 'marker must be a string', path: ['marker'] })
       }
       if (issues.length) return { issues }
-      return { value: { ...DEFAULTS, ...value } }
+      const merged = { ...DEFAULTS, ...input }
+      return { value: { ...merged, files: [...merged.files] } }
     },
   },
 }
@@ -64,16 +81,16 @@ function expandHome(p) {
   return p
 }
 
-function loadSnapshot(filePaths, maxBytes) {
+// Read + truncate the configured files. Called at each prompt assembly so the
+// injected memory reflects file edits without a plugin reload.
+function loadSnapshot(files, maxBytes) {
   const parts = []
   const errors = []
-  for (const raw of filePaths) {
-    const p = expandHome(raw)
-    const abs = resolve(p)
+  for (const raw of files) {
+    const abs = resolve(expandHome(raw))
     try {
       const content = readFileSync(abs, 'utf-8')
-      const sliced = content.length > maxBytes ? content.slice(0, maxBytes) : content
-      parts.push(`--- ${raw} ---\n${sliced}`)
+      parts.push(`--- ${raw} ---\n${content.slice(0, maxBytes)}`)
     } catch (e) {
       errors.push(`${raw}: ${e.message}`)
     }
@@ -85,23 +102,27 @@ function loadSnapshot(filePaths, maxBytes) {
 }
 
 export function apply(ctx, config) {
-  // Cordis object plugins receive config as the SECOND argument (apply(ctx, config)).
-  // ctx.plugin?.config is kept as a fallback for environments that expose it there.
-  const cfg = { ...DEFAULTS, ...(config ?? ctx.plugin?.config ?? {}) }
+  // config is the second argument (merged with defaults) per the Cordis
+  // object/function plugin convention. The Schema has already been run by
+  // Cordis, so the fields are validated; the spread guards a bare invocation.
+  const cfg = { ...DEFAULTS, ...(config ?? {}) }
   const files = cfg.files
   const maxBytes = cfg.maxBytes
   const order = cfg.order
   const marker = cfg.marker
 
-  const snapshot = loadSnapshot(files, maxBytes)
+  // text is a provider evaluated at each assembly, so the snapshot stays
+  // current (see PromptSection.text: string | (context) => string in
+  // packages/core/system-prompt). Returns the disposer automatically handled
+  // by Cordis on unload.
   ctx.systemPrompt.section({
     name: 'memory-snapshot',
     order,
-    text: [
+    text: () => [
       `${marker}-MARKER: 用户记忆快照已注入。`,
       '以下是用户的长期记忆文件（持久化，跨会话持续有效，回答用户问题时优先参考）：',
       '---',
-      snapshot,
+      loadSnapshot(files, maxBytes),
       '---',
       '记忆快照结束。请勿复述以上内容，只需在相关问题时使用它。',
     ].join('\n'),

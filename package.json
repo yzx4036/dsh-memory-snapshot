@@ -4,8 +4,30 @@
   "description": "Zero-dependency DeepSeek Harness plugin: inject local markdown/text files into every session's system prompt as lightweight memory.",
   "type": "module",
   "main": "index.js",
-  "files": ["index.js", "README.md", "LICENSE"],
-  "keywords": ["deepseek-harness", "dsh", "dsh-plugin", "memory", "cordis"],
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "install.mjs",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check install.mjs",
+    "smoke": "dsh --profile headless --dump-config | grep memory-snapshot"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "memory",
+    "cordis"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",

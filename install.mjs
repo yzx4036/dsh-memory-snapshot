@@ -5,6 +5,11 @@
 // and merges a cordis patch entry into $DSH_HOME/cordis.patch.yml (all profiles)
 // or $DSH_HOME/profiles/<name>/cordis.patch.yml (single profile).
 //
+// Install model: local file copy referencing the plugin via a file:/// URL in
+// the cordis patch. This is the zero-dependency path (no registry, no `dsh
+// plugin add`). A future npm publish is possible (see package.json) — the
+// docs/architecture.md "npm publishing" section weighs both options.
+//
 // Usage:
 //   node install.mjs                  # home-level (all profiles)
 //   node install.mjs --profile headless
@@ -93,6 +98,13 @@ function buildEntry() {
 }
 
 // ---- merge into existing patch (never clobber user content) ----
+// "Effectively empty" means: whitespace, YAML comments, and/or the empty flow
+// array `[]` (dsh writes that placeholder in a fresh profile patch). Treating
+// only `''`/`'[]'` as empty missed the commented `[]` header dsh generates,
+// which then produced invalid YAML (`[]` followed by `- insert:`).
+function stripComments(text) {
+  return text.split('\n').map(line => line.trimStart()).filter(line => !line.startsWith('#')).join('\n')
+}
 function mergePatch(patchPath, entry) {
   const exists = existsSync(patchPath)
   if (!exists) {
@@ -103,8 +115,8 @@ function mergePatch(patchPath, entry) {
   if (current.includes(ENTRY_ID) && current.includes(PLUGIN_NAME)) {
     return 'already'
   }
-  const trimmed = current.trim()
-  if (trimmed === '' || trimmed === '[]') {
+  const body = stripComments(current).trim()
+  if (body === '' || body === '[]') {
     writeFileSync(patchPath, entry + '\n', 'utf-8')
     return 'replaced-empty'
   }
@@ -158,9 +170,22 @@ async function main() {
   console.log('  3. Run:  dsh --profile headless "check your memory snapshot and answer: what files did it read?"')
 
   if (opt.verify) {
+    // 1. syntax-check the installed plugin before booting dsh.
+    const check = spawnSync(process.execPath, ['--check', pluginTarget], { encoding: 'utf-8' })
+    if (check.status !== 0) {
+      console.error('VERIFY FAILED: copied plugin fails `node --check`')
+      console.error(check.stderr || check.stdout || '')
+      process.exit(1)
+    }
+    // 2. boot dsh and confirm the entry appears in the composed config.
+    // A shell is required on Windows: `dsh` resolves through a PATH shim
+    // (fnm/nvm/npm) that only a shell can execute; a raw spawnSync fails to
+    // launch it (status null). Built as a single command string — the args are
+    // fixed flags (no user input), so this carries no injection risk.
     const profileArg = opt.profile ? ['--profile', opt.profile] : ['--profile', 'headless']
-    console.log(`\n--verify: dsh ${profileArg.join(' ')} --dump-config ...`)
-    const r = spawnSync('dsh', [...profileArg, '--dump-config'], { encoding: 'utf-8', timeout: 60_000 })
+    const dshCmd = ['dsh', ...profileArg, '--dump-config'].join(' ')
+    console.log(`\n--verify: ${dshCmd} ...`)
+    const r = spawnSync(dshCmd, { encoding: 'utf-8', timeout: 60_000, shell: true })
     if (r.status === 0 && r.stdout.includes(ENTRY_ID)) {
       console.log('VERIFY OK: memory-snapshot appears in dump-config')
     } else {

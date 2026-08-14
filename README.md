@@ -39,6 +39,8 @@ node install.mjs --verify           # 装完跑 dump-config 自检
 2. 把 `index.js` 和 `package.json` 复制到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
 3. 合并 cordis patch——不动你已有的内容：空文件直接写，有内容就追加，装过的跳过
 
+> 别把 `memory-snapshot` 同时装到 home 层和某个 profile 层——两个 `- id: memory-snapshot` 会让 dsh 启动报 `duplicate loader entry id`。要么装 home（全局生效），要么装指定 profile，二选一。
+
 ### 手动安装
 
 1. 把 `index.js` 放到任意位置，比如 `~/.dsh/plugins/dsh-memory-snapshot/index.js`
@@ -70,13 +72,14 @@ node install.mjs --verify           # 装完跑 dump-config 自检
 
 ## 原理
 
-就是个 Cordis 插件：
+就是个 Cordis 插件（函数形式）：
 
-- `inject = ['systemPrompt']` 声明注入点
-- `Config` 实现 `~standard` 接口做配置校验，不引 zod
-- `apply(ctx, config)`——注意 config 是第二个参数（Cordis 对象插件约定，实测 `ctx.plugin.config` 是空的），读文件、截断、注册 section
+- `inject = ['systemPrompt']` 声明注入点，等 `systemPrompt` 服务就绪才加载
+- `Config` 实现 `~standard` 接口做配置校验，不引 zod —— zod / Schemastery 内部就是这接口的包装，直接实现即可合法且零依赖
+- `apply(ctx, config)`——注意 config 是第二个参数（Cordis 对象/函数插件约定，实测 `ctx.plugin.config` 是空的）
+- `text` 用 provider 函数，每次装配时重新读文件——改记忆文件不用重载插件，下次会话就生效
 
-注入内容会进会话的 Trajectory 日志（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，看 `request/header` 的 `system` 字段），模型到底吃了什么，随时能查。
+注入内容会进会话的 Trajectory 日志（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，看 `request/header` 的 `system` 字段），模型到底吃了什么，随时能查。开发细节见 [docs/architecture.md](docs/architecture.md)。
 
 ## 验证
 

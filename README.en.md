@@ -44,6 +44,8 @@ The script will:
 2. Copy `index.js` + `package.json` (ESM declaration) to `$DSH_HOME/plugins/dsh-memory-snapshot/`
 3. **Merge** the cordis patch — never clobbers existing content: creates on empty, appends on existing, skips if already installed
 
+> Don't install `memory-snapshot` into **both** the home layer and a specific profile — two `- id: memory-snapshot` rows make dsh fail to boot with `duplicate loader entry id`. Install home-wide (all profiles) **or** one profile, not both.
+
 ### Manual install
 
 1. Copy `index.js` anywhere on disk (e.g. `~/.dsh/plugins/dsh-memory-snapshot/index.js`).
@@ -79,13 +81,14 @@ Files that fail to read are reported inside the injected section instead of cras
 
 ## How it works
 
-The plugin implements the Cordis plugin contract:
+The plugin implements the Cordis plugin contract (function form):
 
-- `export const inject = ['systemPrompt']` — declares the section injection point
-- `export const Config = { '~standard': { validate } }` — **zero-dependency** Standard Schema config validation (no zod), matching what Cordis expects via `Config['~standard'].validate(config)`
-- `apply(ctx, config)` — **config arrives as the second argument** (Cordis object-plugin convention; verified empirically that `ctx.plugin.config` is not populated), reads each file (UTF-8, truncated to `maxBytes`), and registers a `systemPrompt.section`
+- `export const inject = ['systemPrompt']` — declares the section injection point; the framework loads the plugin only after the `systemPrompt` service is ready
+- `export const Config = { '~standard': { validate } }` — **zero-dependency** Standard Schema config validation (no zod). zod / Schemastery are wrappers over this same interface, so implementing it directly is legal and dependency-free; matching what Cordis expects via `Config['~standard'].validate(config)`
+- `apply(ctx, config)` — **config arrives as the second argument** (Cordis object/function-plugin convention; verified empirically that `ctx.plugin.config` is not populated)
+- `text` is a **provider function** `(context) => string`, re-read at each prompt assembly — edit a memory file without reloading the plugin, and the change shows next turn
 
-The snapshot appears in the session's Trajectory log (`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`, event `request/header` `system` field) — so you can always audit exactly what the model received.
+The snapshot appears in the session's Trajectory log (`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`, event `request/header` `system` field) — so you can always audit exactly what the model received. Dev details: [docs/architecture.md](docs/architecture.md).
 
 ## Verify
 
