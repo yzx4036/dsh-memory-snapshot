@@ -11,6 +11,20 @@ dsh's official memory story is MCP-backed third-party servers ([Memorix](https:/
 
 This plugin covers the simplest need: **read the markdown files you already have**. No server. No database. No model. No account. Point it at `MEMORY.md`, `NOTES.md`, a knowledge base — done.
 
+### Why a plugin? dsh can already read markdown.
+
+Fair question. `dsh` ships `read`/`glob` tools — you can always prompt it "read ~/MEMORY.md". The difference is **who decides memory gets consumed**:
+
+| | Without plugin (passive) | With plugin (active) |
+|---|---|---|
+| Memory present | Only if you prompt it, or the model happens to decide | **Always in the system prompt**, every session |
+| Headless / automation calls | No human to say "check your memory" | Memory is there by default — no caller change needed |
+| Workspace scope | AGENTS.md auto-load is **workspace-local** (and only a low-level user-role reminder, verified empirically) | Plugin can point at **any path**, outside the workspace |
+| Cost per task | Extra tool-call round-trips, model-dependent read depth | Fixed snapshot, `maxBytes`-capped, uniform in Trajectory |
+| Reliability | Model may skim 200 bytes and go | Complete controlled snapshot every time |
+
+So this plugin is not about adding read capability — dsh already has it. It's about making memory **"always present" instead of "possibly remembered"**. The main battlefield is unattended scenarios: headless batches, automation pipelines, multi-agent flows, where no human is around to say "check your memory". If you only ever drive dsh interactively and remember to prompt it, the plugin's value is small — that's an honest trade-off.
+
 ## Install
 
 The plugin is a single ESM file. No npm install needed.
