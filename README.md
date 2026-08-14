@@ -1,50 +1,48 @@
 # dsh-memory-snapshot
 
-零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）插件：把本地 markdown/文本文件的快照注入**每一次会话的系统提示词**，作为轻量级长期记忆。
+[English](README.en.md)
 
-> ⚠️ dsh 处于开发者预览阶段（v0.1.0-rc.x）。插件 API 可能随版本破坏性变更，升级前留意 [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases)。
+零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）插件：把本地 markdown 文件的快照注入每次会话的系统提示词，当长期记忆用。
 
-## 为什么
+> dsh 还是开发者预览版（v0.1.0-rc.x），插件 API 可能随版本变化，升级前看 [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases)。
 
-dsh 官方的记忆方案是 MCP 接入第三方服务（[Memorix](https://github.com/AVIDS2/memorix)、[Engram](https://github.com/Gentleman-Programming/engram)、[MCP Reference Memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)）——全部默认关闭、官方明确不背书，而且每个都要安装服务端/数据库/模型账户。
+## 为什么做
 
-这个插件覆盖最朴素的需求：**读你已经有的 markdown 文件**。不需要服务端、不需要数据库、不需要模型、不需要账户。指向 `MEMORY.md`、`NOTES.md`、知识库——完事。
+dsh 官方记忆方案是走 MCP 接第三方服务（[Memorix](https://github.com/AVIDS2/memorix)、[Engram](https://github.com/Gentleman-Programming/engram)、[MCP Reference Memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)），默认全关，官方也不背书，装一个还得配服务端、数据库、模型账户。
 
-### 为什么要插件？dsh 自己就能读 markdown。
+这个插件只做一件事：读你手头已有的 markdown 文件。不装服务，不建库，不用模型账户。指向 `MEMORY.md`、`NOTES.md` 或知识库，就行。
 
-问得好。dsh 自带 `read`/`glob` 工具，你随时可以提示它「读一下 ~/MEMORY.md」。差别在于**谁来决定记忆被消费**：
+### 那 dsh 自己就能读文件，要插件干嘛？
 
-| | 不用插件（被动） | 用插件（主动） |
-|---|---|---|
-| 记忆在场 | 只有你提示它，或模型碰巧决定读 | **每次会话都无条件在系统提示词里** |
-| headless / 自动化调用 | 没有人在中间说「查一下记忆」 | 记忆默认在场，调用方零改动 |
-| 工作区范围 | AGENTS.md 自动加载**只限工作区内**（且只是 user 层低级别 reminder，实机验证过） | 插件可指向**任意路径**，工作区之外也行 |
-| 每次任务成本 | 多一轮工具调用往返，读多读少看模型心情 | 固定快照，`maxBytes` 截断，Trajectory 里格式统一 |
-| 可靠性 | 模型可能只扫 200 字节就开干 | 每次都是完整可控的快照 |
+dsh 确实自带 read/glob 工具，你也能让它「读 ~/MEMORY.md」。区别在于谁主动：
 
-所以这个插件不是给 dsh 加「读文件能力」——它本来就有。而是把记忆从**「可能被想起」变成「必然在场」**。主战场是无人值守场景：headless 批量、自动化流水线、多 agent 协作——这些地方没有人类在中间说「查一下记忆」。如果你只交互式使用 dsh 且记得每次提示它，这插件的价值有限——这是诚实的取舍。
+- 不用插件：记忆要不要被读，取决于你提没提，或者模型想不想起来
+- 用插件：每个会话系统提示词里都有，不用谁提醒
+
+差在无人值守场景。headless 批量、自动化流水线、多 agent 协作，这些地方没人中途说「去看下记忆」，插件是唯一让记忆默认在场的办法。另外 AGENTS.md 自动加载只覆盖工作区内（层级也低），插件能指任意路径。要是你只手动用 dsh、每次都会提一句，那这插件用处不大——话放这了。
 
 ## 安装
 
-### 一键安装（推荐）
+### 一键安装
 
 ```bash
-node install.mjs                    # 装到 home 层，所有 profile 生效
-node install.mjs --profile headless # 只装到指定 profile
-node install.mjs --files A.md,B.md  # 同时配置初始记忆文件
+node install.mjs                    # 装到 home，所有 profile 生效
+node install.mjs --profile headless # 只装某个 profile
+node install.mjs --files A.md,B.md  # 顺便配初始记忆文件
 node install.mjs --yes              # 跳过确认
-node install.mjs --verify           # 装完自动跑 dsh --dump-config 校验
+node install.mjs --verify           # 装完跑 dump-config 自检
 ```
 
-脚本会自动：
-1. **定位 DSH_HOME**（`$DSH_HOME` 环境变量 → 回退 `~/.dsh`）
-2. 复制 `index.js` + `package.json`（ESM 声明）到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
-3. **合并** cordis patch——绝不覆盖你已有内容：空文件直接写、有内容追加、已装过跳过（幂等）
+脚本做的事：
+
+1. 找 DSH_HOME（`$DSH_HOME` 环境变量，没有就用 `~/.dsh`）
+2. 把 `index.js` 和 `package.json` 复制到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
+3. 合并 cordis patch——不动你已有的内容：空文件直接写，有内容就追加，装过的跳过
 
 ### 手动安装
 
-1. 把 `index.js` 复制到任意位置（如 `~/.dsh/plugins/dsh-memory-snapshot/index.js`）
-2. 在 `~/.dsh/cordis.patch.yml`（所有 profile）或 `~/.dsh/profiles/<name>/cordis.patch.yml`（单 profile）加：
+1. 把 `index.js` 放到任意位置，比如 `~/.dsh/plugins/dsh-memory-snapshot/index.js`
+2. 在 `~/.dsh/cordis.patch.yml`（所有 profile）或 `~/.dsh/profiles/<name>/cordis.patch.yml`（单个）加：
 
 ```yaml
 - insert:
@@ -59,43 +57,35 @@ node install.mjs --verify           # 装完自动跑 dsh --dump-config 校验
         marker: 'MEMORY-SNAPSHOT'
 ```
 
-3. 运行 `dsh --profile headless --dump-config` 确认 `memory-snapshot` 出现
+3. 跑 `dsh --profile headless --dump-config`，看到 `memory-snapshot` 就对了
 
 ## 配置
 
-| 键 | 默认值 | 说明 |
-|---|---|---|
-| `files` | `['./MEMORY.md']` | 要读取的文件路径数组。`~` 展开为 home；相对路径按 cwd 解析 |
-| `maxBytes` | `3000` | 每个文件注入前的字节上限（保护系统提示词体积） |
-| `order` | `50` | `systemPrompt.section` 顺序——越小越靠前 |
-| `marker` | `MEMORY-SNAPSHOT` | 标记文本前缀（快照前出现 `<marker>-MARKER:`） |
+- `files`：要读的文件路径数组，默认 `['./MEMORY.md']`。`~` 会展开成 home，相对路径按 cwd 算
+- `maxBytes`：每个文件注入前的字节上限，默认 3000，防止系统提示词撑爆
+- `order`：`systemPrompt.section` 顺序，默认 50，越小越靠前
+- `marker`：标记前缀，默认 `MEMORY-SNAPSHOT`，快照前会有一行 `<marker>-MARKER:`
 
-读取失败的文件会在注入段里标注原因，而不是让会话崩溃。所有路径支持 `~`。
+读不到的文件会在注入段里标出原因，不会让会话崩。路径都支持 `~`。
 
-## 工作原理
+## 原理
 
-插件实现 Cordis 插件契约：
+就是个 Cordis 插件：
 
-- `export const inject = ['systemPrompt']` — 声明注入点
-- `export const Config = { '~standard': { validate } }` — **零依赖** Standard Schema 配置校验（不引入 zod），匹配 Cordis 的 `Config['~standard'].validate(config)` 约定
-- `apply(ctx, config)` — **config 作为第二个参数传入**（Cordis 对象插件约定，实测 `ctx.plugin.config` 取不到），读取每个文件（UTF-8、按 `maxBytes` 截断），注册 `systemPrompt.section`
+- `inject = ['systemPrompt']` 声明注入点
+- `Config` 实现 `~standard` 接口做配置校验，不引 zod
+- `apply(ctx, config)`——注意 config 是第二个参数（Cordis 对象插件约定，实测 `ctx.plugin.config` 是空的），读文件、截断、注册 section
 
-快照会出现在会话的 Trajectory 日志里（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，`request/header` 事件的 `system` 字段）——模型到底收到什么，永远可审计。
+注入内容会进会话的 Trajectory 日志（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，看 `request/header` 的 `system` 字段），模型到底吃了什么，随时能查。
 
 ## 验证
 
 ```sh
-# 1. 写入/读取：跑一个会话确认 marker 注入
-dsh --profile headless "你的记忆快照里有什么？"   # 回答应引用你的文件
-
-# 2. 新会话回忆：新开会话，问只有你文件里才知道的事
-dsh --profile headless "根据记忆，<你文件里的事实>是什么？"
-
-# 3. 审计：解码最新轨迹，在 request/header.system 里看到快照
+dsh --profile headless "你的记忆快照里有什么？"
+# 新开会话问：根据记忆，<你文件里的事实>是什么？
+# 想看得更细就解最新轨迹日志，request/header.system 里有快照
 ```
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。
-
-[English](README.en.md)
+MIT — [LICENSE](LICENSE)。

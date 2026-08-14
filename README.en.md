@@ -1,5 +1,7 @@
 # dsh-memory-snapshot
 
+[中文文档](README.md)
+
 Zero-dependency [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin:
 inject a snapshot of your local markdown/text files into **every session's system prompt** as lightweight long-term memory.
 
@@ -40,7 +42,7 @@ node install.mjs --verify           # run dsh --dump-config to verify after inst
 The script will:
 1. **Locate DSH_HOME** (`$DSH_HOME` env var → fallback `~/.dsh`)
 2. Copy `index.js` + `package.json` (ESM declaration) to `$DSH_HOME/plugins/dsh-memory-snapshot/`
-3. **Merge** the cordis patch — never clobbers existing content: creates on empty, appends on existing, skips if already installed (idempotent)
+3. **Merge** the cordis patch — never clobbers existing content: creates on empty, appends on existing, skips if already installed
 
 ### Manual install
 
@@ -100,5 +102,3 @@ dsh --profile headless "According to memory, what is <fact in your file>?"
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-[中文文档](README.md)
