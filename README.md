@@ -60,7 +60,7 @@ dsh --profile headless "你的记忆快照里有什么？"
 npm test                # 21 条自动化测试（含真实 dsh 会话）
 ```
 
-手动验收（可选，详细 7 步见 [docs/MANUAL-TEST.md](docs/MANUAL-TEST.md)）：
+手动验收（可选，详细 7 步见 [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)）：
 
 ```sh
 dsh --profile headless "你的记忆快照里有什么？"

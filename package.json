@@ -19,7 +19,7 @@
     "check": "node --check dist/index.js && node --check install.mjs",
     "smoke": "dsh --profile headless --dump-config | grep memory-snapshot",
     "prepublishOnly": "npm run build",
-    "test": "node test.mjs unit && node test.mjs e2e"
+    "test": "node tests/test.mjs unit && node tests/test.mjs e2e"
   },
   "engines": {
     "node": ">=20"

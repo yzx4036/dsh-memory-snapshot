@@ -20,7 +20,8 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
-const ROOT = fileURLToPath(new URL('.', import.meta.url)).replace(/[/\\]$/, '')
+// ROOT = 项目根（tests/ 的上一级），dist/ 在项目根
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/[/\\]$/, '')
 let passed = 0
 let failed = 0
 

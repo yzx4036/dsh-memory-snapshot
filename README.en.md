@@ -71,7 +71,7 @@ The snapshot appears in the session's Trajectory log (`~/.dsh/sessions/<cwd>/<se
 npm test                # 21 automated tests (incl. real dsh session)
 ```
 
-Optional manual acceptance (7-step details: [docs/MANUAL-TEST.md](docs/MANUAL-TEST.md)):
+Optional manual acceptance (7-step details: [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)):
 
 ```sh
 dsh --profile headless "What is in your memory snapshot?"

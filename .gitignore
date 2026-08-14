@@ -8,5 +8,10 @@ docs/.hermes
 # 本地委派脚本（含绝对路径 / 环境变量，不入库）
 .delegate-*.sh
 
+# 本地测试临时文件
+*.log
+*.tmp
+
 # Node
 node_modules/
+package-lock.json
