@@ -18,7 +18,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "node --check dist/index.js && node --check install.mjs",
     "smoke": "dsh --profile headless --dump-config | grep memory-snapshot",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "node test.mjs unit && node test.mjs e2e"
   },
   "engines": {
     "node": ">=20"
