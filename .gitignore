@@ -2,5 +2,8 @@
 verify-overlay.yml
 test-memory.md
 
+# 本地 Agent 配置
+docs/.hermes
+
 # Node
 node_modules/
