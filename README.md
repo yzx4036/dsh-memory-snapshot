@@ -23,65 +23,44 @@ dsh 确实自带 read/glob 工具，你也能让它「读 ~/MEMORY.md」。区�
 
 ## 安装
 
-### 一键安装
+```bash
+node install.mjs        # 一键装好（自动找 DSH_HOME、复制插件、写入配置）
+```
+
+> 其他选项：`--profile headless` 只装某 profile；`--files A.md,B.md` 顺带配记忆文件；`--verify` 装完自检。别同时装 home 和 profile 两层，会报 `duplicate loader entry id`——二选一。
+
+## 使用
+
+装完即生效——**dsh 每次会话自动带着你的记忆文件**，不用任何额外操作：
 
 ```bash
-node install.mjs                    # 装到 home，所有 profile 生效
-node install.mjs --profile headless # 只装某个 profile
-node install.mjs --files A.md,B.md  # 顺便配初始记忆文件
-node install.mjs --yes              # 跳过确认
-node install.mjs --verify           # 装完跑 dump-config 自检
+dsh --profile headless "你的记忆快照里有什么？"
 ```
 
-脚本做的事：
+想换记忆源：改 `~/.dsh/cordis.patch.yml` 里 `memory-snapshot` 的 `files`，指向你的 markdown 文件（支持 `~`），重启 dsh 生效。
 
-1. 找 DSH_HOME（`$DSH_HOME` 环境变量，没有就用 `~/.dsh`）
-2. 把 `dist/index.js` 和 `package.json` 复制到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
-3. 合并 cordis patch——不动你已有的内容：空文件直接写，有内容就追加，装过的跳过
+常见配置：
 
-> 别把 `memory-snapshot` 同时装到 home 层和某个 profile 层——两个 `- id: memory-snapshot` 会让 dsh 启动报 `duplicate loader entry id`。要么装 home（全局生效），要么装指定 profile，二选一。
+- `files`：记忆文件路径，默认 `['./MEMORY.md']`，可多个
+- `maxBytes`：每个文件注入上限，默认 3000，防系统提示词撑爆
+- `order`：section 顺序，默认 50
+- `marker`：标记前缀，默认 `MEMORY-SNAPSHOT`
 
-### 手动安装
-
-1. 把 `dist/index.js` 放到任意位置，比如 `~/.dsh/plugins/dsh-memory-snapshot/dist/index.js`
-2. 在 `~/.dsh/cordis.patch.yml`（所有 profile）或 `~/.dsh/profiles/<name>/cordis.patch.yml`（单个）加：
-
-```yaml
-- insert:
-    - id: memory-snapshot
-      name: 'file:///C:/path/to/dsh-memory-snapshot/dist/index.js'
-      config:
-        files:
-          - '~/MEMORY.md'
-          - 'C:/Proj/notes/context.md'
-        maxBytes: 3000
-        order: 50
-        marker: 'MEMORY-SNAPSHOT'
-```
-
-3. 跑 `dsh --profile headless --dump-config`，看到 `memory-snapshot` 就对了
-
-## 配置
-
-- `files`：要读的文件路径数组，默认 `['./MEMORY.md']`。`~` 会展开成 home，相对路径按 cwd 算
-- `maxBytes`：每个文件注入前的字节上限，默认 3000，防止系统提示词撑爆
-- `order`：`systemPrompt.section` 顺序，默认 50，越小越靠前
-- `marker`：标记前缀，默认 `MEMORY-SNAPSHOT`，快照前会有一行 `<marker>-MARKER:`
-
-读不到的文件会在注入段里标出原因，不会让会话崩。路径都支持 `~`。
+读不到的文件会标出原因，不会让会话崩。
 
 ## 原理
 
-就是个 Cordis 插件（函数形式）：
+就是个 Cordis 插件（函数形式）：`inject = ['systemPrompt']` 声明注入点；`Config` 实现 `~standard` 接口做配置校验（不引 zod，零依赖）；`apply(ctx, config)`——config 是第二个参数（`ctx.plugin.config` 是空的）；`text` 用 provider 函数每次装配重读文件——改记忆文件下次会话就生效。
 
-- `inject = ['systemPrompt']` 声明注入点，等 `systemPrompt` 服务就绪才加载
-- `Config` 实现 `~standard` 接口做配置校验，不引 zod —— zod / Schemastery 内部就是这接口的包装，直接实现即可合法且零依赖
-- `apply(ctx, config)`——注意 config 是第二个参数（Cordis 对象/函数插件约定，实测 `ctx.plugin.config` 是空的）
-- `text` 用 provider 函数，每次装配时重新读文件——改记忆文件不用重载插件，下次会话就生效
+注入内容进 Trajectory 日志（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd` 的 `request/header.system`），模型到底吃了什么随时能查。开发细节见 [docs/architecture.md](docs/architecture.md)。
 
-注入内容会进会话的 Trajectory 日志（`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`，看 `request/header` 的 `system` 字段），模型到底吃了什么，随时能查。开发细节见 [docs/architecture.md](docs/architecture.md)。
+## 测试
 
-## 验证
+```bash
+npm test                # 21 条自动化测试（含真实 dsh 会话）
+```
+
+手动验收（可选，详细 7 步见 [docs/MANUAL-TEST.md](docs/MANUAL-TEST.md)）：
 
 ```sh
 dsh --profile headless "你的记忆快照里有什么？"

@@ -29,55 +29,30 @@ So this plugin is not about adding read capability — dsh already has it. It's 
 
 ## Install
 
-### One-command install (recommended)
-
 ```bash
-node install.mjs                    # install to home layer, all profiles
-node install.mjs --profile headless # install only to a specific profile
-node install.mjs --files A.md,B.md  # also set initial memory files
-node install.mjs --yes              # skip confirmation
-node install.mjs --verify           # run dsh --dump-config to verify after install
+node install.mjs        # one command: locate DSH_HOME, copy plugin, write config
 ```
 
-The script will:
-1. **Locate DSH_HOME** (`$DSH_HOME` env var → fallback `~/.dsh`)
-2. Copy `dist/index.js` + `package.json` (ESM declaration) to `$DSH_HOME/plugins/dsh-memory-snapshot/`
-3. **Merge** the cordis patch — never clobbers existing content: creates on empty, appends on existing, skips if already installed
+> Options: `--profile headless` installs only that profile; `--files A.md,B.md` also sets initial memory files; `--verify` self-checks after install. Don't install into both home and a profile — dsh fails to boot with `duplicate loader entry id`. Pick one.
 
-> Don't install `memory-snapshot` into **both** the home layer and a specific profile — two `- id: memory-snapshot` rows make dsh fail to boot with `duplicate loader entry id`. Install home-wide (all profiles) **or** one profile, not both.
+## Usage
 
-### Manual install
+Installed = active. **Every dsh session now carries your memory files automatically** — nothing else to do:
 
-1. Copy `dist/index.js` anywhere on disk (e.g. `~/.dsh/plugins/dsh-memory-snapshot/dist/index.js`).
-2. Add a patch entry to your profile or home patch layer:
+```bash
+dsh --profile headless "What is in your memory snapshot?"
+```
 
-   `~/.dsh/cordis.patch.yml` (all profiles) or `~/.dsh/profiles/<name>/cordis.patch.yml` (one profile):
+To change memory sources, edit `files` under the `memory-snapshot` entry in `~/.dsh/cordis.patch.yml` (paths support `~`), restart dsh.
 
-   ```yaml
-   - insert:
-       - id: memory-snapshot
-         name: 'file:///C:/path/to/dsh-memory-snapshot/dist/index.js'
-         config:
-           files:
-             - '~/MEMORY.md'
-             - 'C:/Proj/notes/context.md'
-           maxBytes: 3000
-           order: 50
-           marker: 'MEMORY-SNAPSHOT'
-   ```
+Config:
 
-3. Run `dsh --profile headless --dump-config` and confirm the `memory-snapshot` entry appears.
+- `files`: memory file paths, default `['./MEMORY.md']`, multiple allowed
+- `maxBytes`: per-file byte cap, default 3000, protects system prompt size
+- `order`: section order, default 50
+- `marker`: marker prefix, default `MEMORY-SNAPSHOT`
 
-## Config
-
-| Key | Default | Description |
-|---|---|---|
-| `files` | `['./MEMORY.md']` | Array of file paths to read. `~` expands to home. Relative paths resolve against cwd. |
-| `maxBytes` | `3000` | Per-file byte cap before injection (protects system prompt size). |
-| `order` | `50` | `systemPrompt.section` order — lower = earlier in prompt. |
-| `marker` | `MEMORY-SNAPSHOT` | Marker text prefix (`<marker>-MARKER:` appears before the snapshot). |
-
-Files that fail to read are reported inside the injected section instead of crashing the session. All paths support `~`.
+Files that fail to read are reported inside the injected section — the session never crashes.
 
 ## How it works
 
@@ -90,16 +65,16 @@ The plugin implements the Cordis plugin contract (function form):
 
 The snapshot appears in the session's Trajectory log (`~/.dsh/sessions/<cwd>/<session-id>/session.jsonl.zstd`, event `request/header` `system` field) — so you can always audit exactly what the model received. Dev details: [docs/architecture.md](docs/architecture.md).
 
-## Verify
+## Test
+
+```bash
+npm test                # 21 automated tests (incl. real dsh session)
+```
+
+Optional manual acceptance (7-step details: [docs/MANUAL-TEST.md](docs/MANUAL-TEST.md)):
 
 ```sh
-# 1. write/read: run a session and confirm the marker is injected
-dsh --profile headless "What is in your memory snapshot?"   # answer references your files
-
-# 2. fresh-session recall: new session, ask something only your file knows
-dsh --profile headless "According to memory, what is <fact in your file>?"
-
-# 3. audit: decode the latest trajectory and see the snapshot in request/header.system
+dsh --profile headless "What is in your memory snapshot?"
 ```
 
 ## License
