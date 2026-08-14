@@ -3,20 +3,22 @@
   "version": "0.1.0",
   "description": "Zero-dependency DeepSeek Harness plugin: inject local markdown/text files into every session's system prompt as lightweight memory.",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./index.js"
+    ".": "./dist/index.js"
   },
   "files": [
-    "index.js",
+    "dist/",
     "install.mjs",
     "README.md",
     "README.en.md",
     "LICENSE"
   ],
   "scripts": {
-    "check": "node --check index.js && node --check install.mjs",
-    "smoke": "dsh --profile headless --dump-config | grep memory-snapshot"
+    "build": "tsc -p tsconfig.json",
+    "check": "node --check dist/index.js && node --check install.mjs",
+    "smoke": "dsh --profile headless --dump-config | grep memory-snapshot",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=20"
@@ -32,5 +34,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yzx4036/dsh-memory-snapshot"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.7.0"
   }
 }

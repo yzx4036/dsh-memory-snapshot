@@ -10,12 +10,16 @@
 
 ## 如何开发（插件 API 标准）
 
+- 插件是 **TypeScript 源码**（`src/index.ts`），构建产物 `dist/` 入库（用户 clone 即用，无需 toolchain）：
+  ```bash
+  npm run build   # tsc -p tsconfig.json → dist/
+  ```
 - 插件是**函数形式** Cordis 插件，命名导出 `name` / `inject` / `apply`（见 `basic/index.md`）：
-  ```js
+  ```ts
   export const name   = 'dsh-memory-snapshot'
   export const inject = ['systemPrompt']
   export const Config = { '~standard': { validate } }
-  export function apply(ctx, config) { ... }
+  export function apply(ctx: { ... }, config: Config) { ... }
   ```
 - `inject` 声明服务依赖；`systemPrompt` 是注册在 `@deepseek-ai/cordis` `Context` 上的服务。等它就绪才加载。
 - `Config` 用手写 Standard Schema 接口（`~standard`），**零依赖、合法**。zod/Schemastery 只是这接口的包装。schema 填充默认值 → `apply` 收到的 config 是完整合并后的。
@@ -25,13 +29,14 @@
 ## 如何构建 / 验证
 
 ```bash
-npm run check       # node --check index.js + install.mjs（语法）
-npm run smoke       # dsh --profile headless --dump-config | grep memory-snapshot
-node install.mjs --verify   # 复制后自检（--check 复制产物 + dump-config）
+npm run build      # tsc -p tsconfig.json → dist/（改 src 后必须 build）
+npm run check      # node --check dist/index.js + install.mjs（语法）
+npm run smoke      # dsh --profile headless --dump-config | grep memory-snapshot
+node install.mjs --verify   # 部署 dist 后自检
 dsh --profile headless "你的记忆快照里有什么？"  # 实机会话验证
 ```
 
-改动后至少跑 `npm run check` + `npm run smoke`。无测试框架，验证靠上面的命令 + 实机会话。
+改动后至少 `npm run build` + `npm run check` + `npm run smoke`。无测试框架，验证靠上面的命令 + 实机会话。
 
 ## 文档规范
 

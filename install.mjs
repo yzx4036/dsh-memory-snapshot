@@ -23,9 +23,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
+// NOTE: this plugin is authored in TypeScript (src/index.ts); the installer
+// deploys the tsc build output (dist/index.js) so users never need a toolchain.
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_NAME = 'dsh-memory-snapshot'
 const ENTRY_ID = 'memory-snapshot'
+const SOURCE_FILE = join(SCRIPT_DIR, 'dist', 'index.js')
+const DEPLOY_NAME = 'index.js'
 
 // ---- arg parsing (no deps) ----
 const args = process.argv.slice(2)
@@ -56,7 +60,7 @@ function findDshHome() {
 }
 const dshHome = findDshHome()
 const pluginDir = join(dshHome, 'plugins', PLUGIN_NAME)
-const pluginTarget = join(pluginDir, 'index.js')
+const pluginTarget = join(pluginDir, DEPLOY_NAME)
 
 // ---- patch target ----
 const patchTarget = opt.profile
@@ -137,8 +141,13 @@ async function main() {
     if (!ok) { console.log('aborted'); process.exit(1) }
   }
 
+  if (!existsSync(SOURCE_FILE)) {
+    console.error(`ERROR: build output missing: ${SOURCE_FILE}`)
+    console.error('Run `npm run build` (or `tsc -p tsconfig.json`) first.')
+    process.exit(1)
+  }
   mkdirSync(pluginDir, { recursive: true })
-  copyFileSync(join(SCRIPT_DIR, 'index.js'), pluginTarget)
+  copyFileSync(SOURCE_FILE, pluginTarget)
   // write a minimal package.json so Node treats index.js as ESM (avoids MODULE_TYPELESS_PACKAGE_JSON warning)
   const pkgPath = join(pluginDir, 'package.json')
   const pkgContent = JSON.stringify({

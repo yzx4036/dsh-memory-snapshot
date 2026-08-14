@@ -8,7 +8,7 @@
 // server, no database, no model, no account.
 //
 // Plugin contract (official standard):
-//   - Function form: export { name, inject, apply } — see
+//   - A plugin is a TypeScript module that exports `apply` — see
 //     docs/user/develop/basic/index.md ("Your first plugin").
 //   - Config is the SECOND argument of apply(ctx, config) — object/function
 //     plugins receive it there, not via ctx.plugin.config.
@@ -21,12 +21,13 @@
 //
 // Config (via cordis.patch.yml):
 //   - id: memory-snapshot
-//     name: '<path-to-this-plugin>/index.js'      # or file:///...
+//     name: '<path-to-built>/dist/index.js'     # or file:///...
 //     config:
 //       files: ['./MEMORY.md', '~/notes/context.md']  # paths, ~ supported
 //       maxBytes: 3000          # per-file cap before injection
 //       order: 50               # systemPrompt section order (persona=0, tools=100-199)
 //       marker: 'MEMORY-SNAPSHOT'  # marker text before the snapshot
+
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
@@ -34,7 +35,14 @@ import { resolve } from 'node:path'
 export const name = 'dsh-memory-snapshot'
 export const inject = ['systemPrompt']
 
-const DEFAULTS = {
+export interface Config {
+  files: string[]
+  maxBytes: number
+  order: number
+  marker: string
+}
+
+const DEFAULTS: Config = {
   files: ['./MEMORY.md'],
   maxBytes: 3000,
   order: 50,
@@ -47,16 +55,27 @@ const DEFAULTS = {
 // a primitive (valid) schema here needs no external dependency. Per the
 // official "Fail loudly on invalid configuration" principle, invalid input
 // returns issues at load time instead of silently misbehaving later.
-export const Config = {
+type StdResult =
+  | { value: Config }
+  | { issues: { message: string; path: (string | number)[] }[] }
+
+interface StdIssue {
+  message: string
+  path: (string | number)[]
+}
+
+export const Config: { '~standard': { version: 1; vendor: string; validate(value: unknown): StdResult } } = {
   '~standard': {
     version: 1,
     vendor: 'dsh-memory-snapshot',
-    validate(value) {
-      const issues = []
-      const input = value === undefined || value === null ? {} : value
-      if (!Array.isArray(input.files ?? DEFAULTS.files)) {
+    validate(value: unknown): StdResult {
+      const issues: StdIssue[] = []
+      const input: Record<string, unknown> =
+        value === undefined || value === null ? {} : (value as Record<string, unknown>)
+      const files = (input.files as unknown) ?? DEFAULTS.files
+      if (!Array.isArray(files)) {
         issues.push({ message: 'files must be an array of paths', path: ['files'] })
-      } else if (input.files.some(f => typeof f !== 'string')) {
+      } else if (files.some(f => typeof f !== 'string')) {
         issues.push({ message: 'every file path must be a string', path: ['files'] })
       }
       if (input.maxBytes !== undefined && (typeof input.maxBytes !== 'number' || !Number.isFinite(input.maxBytes) || input.maxBytes <= 0)) {
@@ -69,13 +88,14 @@ export const Config = {
         issues.push({ message: 'marker must be a string', path: ['marker'] })
       }
       if (issues.length) return { issues }
-      const merged = { ...DEFAULTS, ...input }
-      return { value: { ...merged, files: [...merged.files] } }
+      const merged: Config = { ...DEFAULTS, ...(input as Partial<Config>) }
+      merged.files = [...(files as string[])]
+      return { value: merged }
     },
   },
 }
 
-function expandHome(p) {
+function expandHome(p: string): string {
   if (p === '~') return homedir()
   if (p.startsWith('~/') || p.startsWith('~\\')) return resolve(homedir(), p.slice(2))
   return p
@@ -83,16 +103,16 @@ function expandHome(p) {
 
 // Read + truncate the configured files. Called at each prompt assembly so the
 // injected memory reflects file edits without a plugin reload.
-function loadSnapshot(files, maxBytes) {
-  const parts = []
-  const errors = []
+function loadSnapshot(files: string[], maxBytes: number): string {
+  const parts: string[] = []
+  const errors: string[] = []
   for (const raw of files) {
     const abs = resolve(expandHome(raw))
     try {
       const content = readFileSync(abs, 'utf-8')
       parts.push(`--- ${raw} ---\n${content.slice(0, maxBytes)}`)
     } catch (e) {
-      errors.push(`${raw}: ${e.message}`)
+      errors.push(`${raw}: ${(e as Error).message}`)
     }
   }
   if (parts.length === 0) {
@@ -101,15 +121,15 @@ function loadSnapshot(files, maxBytes) {
   return parts.join('\n\n') + (errors.length ? `\n\n(部分文件读取失败: ${errors.join('; ')})` : '')
 }
 
-export function apply(ctx, config) {
+export function apply(ctx: { systemPrompt: { section(opt: { name: string; order: number; text: string | (() => string) }): void } }, config: Config) {
   // config is the second argument (merged with defaults) per the Cordis
   // object/function plugin convention. The Schema has already been run by
   // Cordis, so the fields are validated; the spread guards a bare invocation.
-  const cfg = { ...DEFAULTS, ...(config ?? {}) }
+  const cfg: Config = { ...DEFAULTS, ...(config ?? {}) } as Config
+  const { order, marker } = cfg
+  // Rebind files/maxBytes so the provider closure stays current.
   const files = cfg.files
   const maxBytes = cfg.maxBytes
-  const order = cfg.order
-  const marker = cfg.marker
 
   // text is a provider evaluated at each assembly, so the snapshot stays
   // current (see PromptSection.text: string | (context) => string in

@@ -41,14 +41,14 @@ node install.mjs --verify           # run dsh --dump-config to verify after inst
 
 The script will:
 1. **Locate DSH_HOME** (`$DSH_HOME` env var → fallback `~/.dsh`)
-2. Copy `index.js` + `package.json` (ESM declaration) to `$DSH_HOME/plugins/dsh-memory-snapshot/`
+2. Copy `dist/index.js` + `package.json` (ESM declaration) to `$DSH_HOME/plugins/dsh-memory-snapshot/`
 3. **Merge** the cordis patch — never clobbers existing content: creates on empty, appends on existing, skips if already installed
 
 > Don't install `memory-snapshot` into **both** the home layer and a specific profile — two `- id: memory-snapshot` rows make dsh fail to boot with `duplicate loader entry id`. Install home-wide (all profiles) **or** one profile, not both.
 
 ### Manual install
 
-1. Copy `index.js` anywhere on disk (e.g. `~/.dsh/plugins/dsh-memory-snapshot/index.js`).
+1. Copy `dist/index.js` anywhere on disk (e.g. `~/.dsh/plugins/dsh-memory-snapshot/dist/index.js`).
 2. Add a patch entry to your profile or home patch layer:
 
    `~/.dsh/cordis.patch.yml` (all profiles) or `~/.dsh/profiles/<name>/cordis.patch.yml` (one profile):
@@ -56,7 +56,7 @@ The script will:
    ```yaml
    - insert:
        - id: memory-snapshot
-         name: 'file:///C:/path/to/dsh-memory-snapshot/index.js'
+         name: 'file:///C:/path/to/dsh-memory-snapshot/dist/index.js'
          config:
            files:
              - '~/MEMORY.md'

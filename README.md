@@ -36,20 +36,20 @@ node install.mjs --verify           # 装完跑 dump-config 自检
 脚本做的事：
 
 1. 找 DSH_HOME（`$DSH_HOME` 环境变量，没有就用 `~/.dsh`）
-2. 把 `index.js` 和 `package.json` 复制到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
+2. 把 `dist/index.js` 和 `package.json` 复制到 `$DSH_HOME/plugins/dsh-memory-snapshot/`
 3. 合并 cordis patch——不动你已有的内容：空文件直接写，有内容就追加，装过的跳过
 
 > 别把 `memory-snapshot` 同时装到 home 层和某个 profile 层——两个 `- id: memory-snapshot` 会让 dsh 启动报 `duplicate loader entry id`。要么装 home（全局生效），要么装指定 profile，二选一。
 
 ### 手动安装
 
-1. 把 `index.js` 放到任意位置，比如 `~/.dsh/plugins/dsh-memory-snapshot/index.js`
+1. 把 `dist/index.js` 放到任意位置，比如 `~/.dsh/plugins/dsh-memory-snapshot/dist/index.js`
 2. 在 `~/.dsh/cordis.patch.yml`（所有 profile）或 `~/.dsh/profiles/<name>/cordis.patch.yml`（单个）加：
 
 ```yaml
 - insert:
     - id: memory-snapshot
-      name: 'file:///C:/path/to/dsh-memory-snapshot/index.js'
+      name: 'file:///C:/path/to/dsh-memory-snapshot/dist/index.js'
       config:
         files:
           - '~/MEMORY.md'
