@@ -32,6 +32,7 @@
     "cordis"
   ],
   "license": "MIT",
+  "author": "E_Ye <E_Ye@outlook.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/yzx4036/dsh-memory-snapshot"
