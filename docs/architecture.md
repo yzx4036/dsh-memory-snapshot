@@ -4,22 +4,24 @@
 
 ## 这是什么
 
-零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Cordis 插件。每个会话装配系统提示词时，把本地 markdown 文件的快照注入为一个 `systemPrompt` section，当长期记忆用。
+零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Cordis 插件。宗旨：用户通常已在用其他 Agent 工具（Codex、Claude Code、Hermes、OpenCode 等），各自积累了约束规则或长期记忆等 markdown 文档，散在不同目录；或攒了一套知识库仓库，里面存着想随时注入的规则、文档、知识。本插件把这些文档路径列进 `files`，dsh 每次会话装配系统提示词时全文注入，跨工作区生效（home 级安装 + 绝对路径）。单向只读，不写回文件。原版 dsh 的 AGENTS.md 自动加载只覆盖 `~/.dsh/AGENTS.md`（全局单文件）和项目目录链，读不到其他工具的全局文档。
 
-定位：dsh 官方记忆方案是 MCP 接第三方服务（默认全关、不背书）。本插件只读手头已有的文件 —— 不装服务、不建库、不用模型账户。
+定位：dsh 没有内置全局记忆（官方 50+ 包无 memory 包，用户文档无记忆章节，2026-08 核对）。社区记忆插件（dsh-statecore / Nowledge Mem / Hindsight）走「记忆引擎」路线——服务 + 数据库 + 自动吸收蒸馏，能力强但重。本插件在另一极：已有文档不动、原地注入。无引擎、无数据库、无写入通道，只读注入。
 
 ## 组成
 
 ```
 dsh-memory-snapshot/
-├── index.js        # 插件本体：函数形式 Corders 插件（name/inject/apply + Config schema）
+├── src/index.ts    # 插件本体（TypeScript 源码）：函数形式 Cordis 插件（name/inject/apply + Config schema）
+├── dist/           # tsc 构建产物，入库（用户 clone 即用，无需 toolchain）
 ├── install.mjs     # 一键安装器：复制插件 + 合并 cordis.patch 到 DSH_HOME
 ├── package.json    # npm 包声明：exports/engines/scripts（可发布，见下）
 ├── README.md       # 中文主文档（含英文版链接）
 ├── README.en.md    # 英文文档
+├── tests/          # 自动化测试（test.mjs）+ 手动验收步骤（MANUAL-TEST.md）
 └── docs/
     ├── architecture.md   # 本文：as-built 架构
-    └── forge-brief.md    # 早期 onboarding 简要（历史文档，保留引用）
+    └── forge-brief.md    # 早期 onboarding 快照（历史文档，内容以本文为准）
 ```
 
 ## 插件本体（index.js）

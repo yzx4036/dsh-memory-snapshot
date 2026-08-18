@@ -1,6 +1,8 @@
 # forge-brief — dsh-memory-snapshot
 
 > 生成：2026-08-14 · 来源：OpenCode /forge-onboard 逆向
+>
+> 历史快照，定位描述已过时——当前宗旨（注入其他 Agent 工具散落的 markdown 文档，跨工作区生效）与生态对比以 ../README.md、architecture.md 为准。
 
 ## 项目概述
 

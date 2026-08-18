@@ -2,10 +2,17 @@
 // Zero-dependency DeepSeek Harness (dsh) plugin: inject a snapshot of local
 // markdown/text files into every session's system prompt as lightweight memory.
 //
-// Why: dsh's official memory story is MCP-backed third-party servers (Memorix,
-// Engram, MCP reference memory — all default-off, not endorsed by DeepSeek).
-// This plugin covers the simplest need: "read files I already have" — no
-// server, no database, no model, no account.
+// Why: most dsh users already run other Agent tools (Codex, Claude Code,
+// Hermes, OpenCode, ...), each with its own rule files and long-term-memory
+// markdown documents scattered across different directories; some also keep
+// a knowledge-base repo of rules, docs and knowledge they want carried
+// along. This plugin lets you list those document paths in `files`; dsh then
+// proactively injects them into every session's system prompt — across all
+// workspaces (home-level install + absolute paths). Stock dsh's AGENTS.md
+// auto-load only covers `~/.dsh/AGENTS.md` (one global file) and the project
+// directory chain — it never reads other tools' global documents. One-way
+// and read-only: dsh never writes back.
+// No server, no database, no model account, no dependency.
 //
 // Plugin contract (official standard):
 //   - A plugin is a TypeScript module that exports `apply` — see

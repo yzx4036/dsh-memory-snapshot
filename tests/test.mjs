@@ -29,10 +29,10 @@ function test(name, fn) {
   try {
     fn()
     passed++
-    console.log(`  ✅ ${name}`)
+    console.log(`  [PASS] ${name}`)
   } catch (e) {
     failed++
-    console.error(`  ❌ ${name}\n     ${e.message}`)
+    console.error(`  [FAIL] ${name}\n     ${e.message}`)
   }
 }
 

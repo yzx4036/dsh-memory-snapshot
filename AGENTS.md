@@ -4,7 +4,9 @@
 
 ## 这是什么
 
-零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Cordis 插件：把本地 markdown 文件快照注入每个会话的系统提示词，当长期记忆。不装服务、不建库、不用模型账户。
+零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Cordis 插件：把其他 Agent 工具（Codex、Claude Code、Hermes、OpenCode 等）或知识库仓库里的 markdown 文档，按用户给的路径列表注入每个会话的系统提示词，当跨会话全局记忆。文档不动、原地注入，单向只读不写回。不装服务、不建库、不用模型账户。
+
+背景要点（写文档时要一致）：dsh 无内置全局记忆，AGENTS.md 自动加载全局只认 `~/.dsh/AGENTS.md`、工作区级只管项目目录链，读不到其他工具的全局文档（2026-08 核对官方仓库 + 本机源码实证）。社区记忆插件走「记忆引擎」路线，较重度；本插件走轻量快照注入。跨工作区生效的前提是 home 级安装（`~/.dsh/cordis.patch.yml`）+ 绝对路径/`~`。
 
 改代码前先读官方插件开发文档：`https://github.com/deepseek-ai/deepseek-harness` 的 `docs/user/develop/basic/`（index/config/publish）+ `packages/core/system-prompt/src/index.ts`（`systemPrompt` 服务真实签名，本文据此核对）。拿不准先读文档再写。
 
@@ -31,12 +33,12 @@
 ```bash
 npm run build      # tsc -p tsconfig.json → dist/（改 src 后必须 build）
 npm run check      # node --check dist/index.js + install.mjs（语法）
+npm run test       # tests/test.mjs：14 unit + 7 e2e（含真实 dsh 会话，需网络）
 npm run smoke      # dsh --profile headless --dump-config | grep memory-snapshot
 node install.mjs --verify   # 部署 dist 后自检
-dsh --profile headless "你的记忆快照里有什么？"  # 实机会话验证
 ```
 
-改动后至少 `npm run build` + `npm run check` + `npm run smoke`。无测试框架，验证靠上面的命令 + 实机会话。
+改动后至少 `npm run build` + `npm run check` + `npm run test`；文档改动可只跑 `npm run check`。
 
 ## 文档规范
 
