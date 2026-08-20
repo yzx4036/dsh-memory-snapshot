@@ -69,7 +69,7 @@ dsh --profile headless "你的记忆快照里有什么？"
 ## 测试
 
 ```bash
-npm test                # 32 条自动化测试（含真实 dsh 会话）
+npm test                # 40 条自动化测试（含真实 dsh 会话）
 ```
 
 手动验收（可选，完整 7 步见 [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)）：

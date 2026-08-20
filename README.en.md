@@ -69,7 +69,7 @@ A function-style Cordis plugin: `inject = ['systemPrompt']` declares the injecti
 ## Test
 
 ```bash
-npm test                # 32 automated tests (including a real dsh session)
+npm test                # 40 automated tests (including a real dsh session)
 ```
 
 Manual acceptance (optional, full 7 steps in [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)):

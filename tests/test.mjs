@@ -195,6 +195,71 @@ async function unitTruncation() {
       assert.ok(!okText.includes('…[已截断'))
     })
 
+    // P1 对抗边界：空文件、精确边界、极小预算、无换行和 4 字节字符
+    const emptyFile = join(tmp, 'empty.md')
+    writeFileSync(emptyFile, '', 'utf-8')
+    const emptyText = applyWith({ files: [emptyFile], maxBytes: 1, order: 40, marker: 'TEST' })
+    test('空文件作为 0 字节内容正常注入', () => {
+      assert.equal(extractBody(emptyText, emptyFile), '')
+      assert.ok(!emptyText.includes('MEMORY-SNAPSHOT-ERROR'))
+      assert.ok(!emptyText.includes('…[已截断'))
+    })
+
+    const exactFile = join(tmp, 'exact.md')
+    const exactContent = '边界😀'
+    const exactBytes = Buffer.byteLength(exactContent, 'utf8')
+    writeFileSync(exactFile, exactContent, 'utf-8')
+    const exactText = applyWith({ files: [exactFile], maxBytes: exactBytes, order: 40, marker: 'TEST' })
+    test('maxBytes 恰好等于文件字节数时不截断', () => {
+      assert.equal(extractBody(exactText, exactFile), exactContent)
+      assert.ok(!exactText.includes('…[已截断'))
+    })
+
+    const tinyFile = join(tmp, 'tiny.md')
+    writeFileSync(tinyFile, '中', 'utf-8')
+    const tinyText = applyWith({ files: [tinyFile], maxBytes: 1, order: 40, marker: 'TEST' })
+    const tinyBody = extractBody(tinyText, tinyFile)
+    test('maxBytes 小于首字符字节数时内容为空但保留截断标记', () => {
+      const markerAt = tinyBody.indexOf('…[已截断')
+      assert.ok(markerAt !== -1, '有截断标记')
+      assert.equal(tinyBody.slice(0, markerAt).trim(), '')
+      assert.ok(tinyBody.includes('原文 3 字节，注入前 0 字节'))
+      assert.ok(!tinyBody.includes('中'))
+    })
+
+    const noNlFile = join(tmp, 'no-newline.md')
+    writeFileSync(noNlFile, 'abcdef', 'utf-8')
+    const noNlText = applyWith({ files: [noNlFile], maxBytes: 4, order: 40, marker: 'TEST' })
+    const noNlBody = extractBody(noNlText, noNlFile)
+    test('内容无换行符时保留字节截断结果', () => {
+      assert.ok(noNlBody.startsWith('abcd\n…[已截断'))
+      assert.ok(noNlBody.includes('注入前 4 字节'))
+      assert.ok(!noNlBody.includes('abcde'))
+    })
+
+    const emojiFile = join(tmp, 'emoji.md')
+    writeFileSync(emojiFile, '😀😀', 'utf-8')
+    const emojiText = applyWith({ files: [emojiFile], maxBytes: 5, order: 40, marker: 'TEST' })
+    const emojiBody = extractBody(emojiText, emojiFile)
+    test('emoji 四字节字符截断不产生替换字符', () => {
+      assert.ok(emojiBody.startsWith('😀\n…[已截断'))
+      assert.ok(emojiBody.includes('注入前 4 字节'))
+      assert.ok(!emojiBody.includes('😀😀'))
+      assert.ok(!emojiBody.includes('\uFFFD'))
+    })
+
+    const markerFile = join(tmp, 'marker-budget.md')
+    writeFileSync(markerFile, 'abcdef', 'utf-8')
+    const markerText = applyWith({ files: [markerFile], maxBytes: 3, order: 40, marker: 'TEST' })
+    const markerBody = extractBody(markerText, markerFile)
+    test('截断标记不占用 maxBytes 内容预算', () => {
+      const markerAt = markerBody.indexOf('…[已截断')
+      assert.ok(markerAt !== -1, '有截断标记')
+      assert.equal(markerBody.slice(0, markerAt).trimEnd(), 'abc')
+      assert.ok(markerBody.includes('注入前 3 字节'))
+      assert.ok(Buffer.byteLength(markerBody, 'utf8') > 3)
+    })
+
     // R3：totalMaxBytes=0 不限制；有限预算下超预算文件跳过且后续小文件仍注入
     const bigFile = join(tmp, 'big.md')
     const smallFile = join(tmp, 'small.md')
@@ -232,6 +297,36 @@ async function unitTruncation() {
     test('预算计量含 --- path --- 头行', () => {
       assert.ok(!hdrText.includes(hdrContent))
       assert.ok(hdrText.includes(`[未注入: ${hdrFile}，超出总预算]`))
+    })
+
+    const firstFile = join(tmp, 'first.md')
+    const secondFile = join(tmp, 'second.md')
+    const firstContent = 'BUDGET-FIRST'
+    const secondContent = 'BUDGET-SECOND'
+    writeFileSync(firstFile, firstContent, 'utf-8')
+    writeFileSync(secondFile, secondContent, 'utf-8')
+    const firstFullBytes = Buffer.byteLength(`--- ${firstFile} ---\n${firstContent}`, 'utf8')
+    const exactBudgetText = applyWith({
+      files: [firstFile, secondFile], maxBytes: 1000,
+      totalMaxBytes: firstFullBytes, order: 40, marker: 'TEST',
+    })
+    test('totalMaxBytes 恰好等于首个文件字节数时首文件注入', () => {
+      assert.ok(exactBudgetText.includes(firstContent))
+      assert.ok(!exactBudgetText.includes(secondContent))
+      assert.ok(exactBudgetText.includes(`[未注入: ${secondFile}，超出总预算]`))
+      assert.ok(!exactBudgetText.includes('MEMORY-SNAPSHOT-ERROR'))
+    })
+
+    const allOverText = applyWith({
+      files: [firstFile, secondFile], maxBytes: 1000,
+      totalMaxBytes: 1, order: 40, marker: 'TEST',
+    })
+    test('全部文件超预算时返回 MEMORY-SNAPSHOT-ERROR', () => {
+      assert.ok(allOverText.includes('MEMORY-SNAPSHOT-ERROR: 无文件注入（全部超出总预算）'))
+      assert.ok(allOverText.includes(`[未注入: ${firstFile}，超出总预算]`))
+      assert.ok(allOverText.includes(`[未注入: ${secondFile}，超出总预算]`))
+      assert.ok(!allOverText.includes(firstContent))
+      assert.ok(!allOverText.includes(secondContent))
     })
   } finally {
     rmSync(tmp, { recursive: true, force: true })
