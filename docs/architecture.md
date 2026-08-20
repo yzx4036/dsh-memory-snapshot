@@ -48,7 +48,8 @@ export function apply(ctx, config) { /* ... */ }
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `files` | `['./MEMORY.md']` | 读的文件路径数组，`~` 展开，相对路径按 cwd。校验为 string 数组正失败 |
-| `maxBytes` | `3000` | 每文件注入前字节上限；校验为正有限数否则加载即失败 |
+| `maxBytes` | `3000` | 每文件注入前字节上限（UTF-8 字节，不切断多字节字符，截断后回退到换行边界并追加「已截断」标记）；校验为正有限数否则加载即失败 |
+| `totalMaxBytes` | `0` | 所有文件合计注入字节上限（含头行与截断标记），`0`=不设总上限；按 `files` 顺序贪心分配，超出跳过并标注；校验为非负有限数否则加载即失败 |
 | `order` | `50` | `systemPrompt.section` 顺序 |
 | `marker` | `MEMORY-SNAPSHOT` | 快照前标记 `<marker>-MARKER:` |
 

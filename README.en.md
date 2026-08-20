@@ -24,7 +24,7 @@ Does:
 
 - One or more md files, any directory (`~` supported), injected in full at every prompt assembly
 - Edits take effect next session
-- Per-file byte cap (`maxBytes`) so the system prompt can't blow up
+- Per-file byte cap (`maxBytes`), truncated by UTF-8 bytes, rolled back to a line boundary, with a "truncated" marker; plus a combined budget (`totalMaxBytes`) so many files together can't blow up the system prompt
 - Unreadable files are reported with the reason; the session never crashes
 - Injected content lands in the Trajectory log — you can always audit what the model received
 
@@ -55,7 +55,8 @@ To change memory sources, edit `files` under the `memory-snapshot` entry in `~/.
 Common config:
 
 - `files`: list of document paths, default `['./MEMORY.md']`, multiple allowed. **For cross-workspace effect use absolute paths or `~`** — relative paths resolve against dsh's launch directory, so each workspace ends up looking for its own copy
-- `maxBytes`: per-file injection cap, default 3000 bytes
+- `maxBytes`: per-file injection cap, default 3000 bytes (truncated by UTF-8 bytes, never splitting a multi-byte character, rolled back to a line boundary)
+- `totalMaxBytes`: combined injection cap across all files, default `0` (no combined cap). When exceeded, files are skipped in `files` order and noted at the end
 - `order`: section order, default 50
 - `marker`: marker prefix, default `MEMORY-SNAPSHOT`
 
@@ -68,7 +69,7 @@ A function-style Cordis plugin: `inject = ['systemPrompt']` declares the injecti
 ## Test
 
 ```bash
-npm test                # 21 automated tests (including a real dsh session)
+npm test                # 32 automated tests (including a real dsh session)
 ```
 
 Manual acceptance (optional, full 7 steps in [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)):
