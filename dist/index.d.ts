@@ -3,6 +3,7 @@ export declare const inject: string[];
 export interface Config {
     files: string[];
     maxBytes: number;
+    totalMaxBytes: number;
     order: number;
     marker: string;
 }
