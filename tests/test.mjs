@@ -328,6 +328,14 @@ async function unitTruncation() {
       assert.ok(!allOverText.includes(firstContent))
       assert.ok(!allOverText.includes(secondContent))
     })
+
+    // files: [] 空数组 → 无文件可注入（v0.1.2 语义：不再是「无法读取任何记忆文件」）
+    const emptyListText = applyWith({ files: [], maxBytes: 1000, order: 40, marker: 'TEST' })
+    test('files 为空数组时返回 MEMORY-SNAPSHOT-ERROR: 无记忆文件', () => {
+      assert.ok(emptyListText.includes('MEMORY-SNAPSHOT-ERROR: 无记忆文件'))
+      assert.ok(!emptyListText.includes('无法读取任何记忆文件'))
+      assert.ok(!emptyListText.includes('…[已截断'))
+    })
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
