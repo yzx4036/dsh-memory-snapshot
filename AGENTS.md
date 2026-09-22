@@ -33,7 +33,9 @@
 ```bash
 npm run build      # tsc -p tsconfig.json → dist/（改 src 后必须 build）
 npm run check      # node --check dist/index.js + install.mjs（语法）
-npm run test       # tests/test.mjs：14 unit + 7 e2e（含真实 dsh 会话，需网络）
+npm run test       # tests/test.mjs：34 unit + 7 e2e（含真实 dsh 会话，需网络）
+                   # 实机会话需要凭据：DEEPSEEK_API_KEY 在环境里，或写 $DSH_HOME/.env
+                   # 都没配时该用例标 SKIP（不算失败），其余照跑
 npm run smoke      # dsh --profile headless --dump-config | grep memory-snapshot
 node install.mjs --verify   # 部署 dist 后自检
 ```

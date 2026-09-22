@@ -2,6 +2,14 @@
 
 > 迭代方向，按优先级排列。编号沿用规划时的序号。原则：保持零依赖、单向只读注入的定位；不做记忆引擎功能（自动吸收、蒸馏、检索、模型侧写回）。
 
+## v0.1.3（已完成）
+
+| # | 项目 | 说明 |
+|---|------|------|
+| 1 | 兼容 dsh 0.1.5-rc.2 | 核验插件 API 未变（`inject=['systemPrompt']`、`apply(ctx,config)`、`PromptSection.text` 仍支持 provider 函数、每次装配重算），实机会话与 `--dump-config` 均正常 |
+| 2 | e2e 断言改为读实际配置 | 原断言写死 `MEMORY.md`/`riven-hermes`，用户把 `files` 指到别处（如知识库某 md）时假红；改为解析已安装 patch 的 `files` 取 basename，支持 `DSH_MEM_TEST_EXPECT` 覆盖 |
+| 3 | install.mjs 版本现读 | 部署的 `package.json` 曾写死 `0.1.0`，升级后显示旧版本误导排查；改为读发布物 `package.json` |
+
 ## v0.1.2（已完成）
 
 | # | 项目 | 说明 |
