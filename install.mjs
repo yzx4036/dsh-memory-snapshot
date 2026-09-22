@@ -149,10 +149,12 @@ async function main() {
   mkdirSync(pluginDir, { recursive: true })
   copyFileSync(SOURCE_FILE, pluginTarget)
   // write a minimal package.json so Node treats index.js as ESM (avoids MODULE_TYPELESS_PACKAGE_JSON warning)
+  // version 从发布物 package.json 现读——写死会在升级后显示旧版本，误导排查
   const pkgPath = join(pluginDir, 'package.json')
+  const ownPkg = JSON.parse(readFileSync(join(SCRIPT_DIR, 'package.json'), 'utf-8'))
   const pkgContent = JSON.stringify({
     name: PLUGIN_NAME,
-    version: '0.1.0',
+    version: ownPkg.version,
     private: true,
     type: 'module',
     main: 'index.js',
