@@ -14,9 +14,9 @@
 //  [e2e]  dist 构建产物加载形状
 //  [e2e]  真实 dsh：dump-config 含 memory-snapshot + 实机会话
 import { strict as assert } from 'node:assert'
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { tmpdir, homedir } from 'node:os'
+import { join, basename } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
@@ -352,6 +352,58 @@ async function e2eDistShape() {
 }
 
 // ---------- e2e: 真实 dsh ----------
+
+// 期望关键词来自「实际安装的 patch 配置」，不是写死的默认文件名：
+// 用户把 files 指到任意文档（如知识库里的某个 md）都该算通过，
+// 写死 MEMORY.md / riven-hermes 会在非默认配置上假红。
+// 可用 DSH_MEM_TEST_EXPECT=a.md,b.md 显式覆盖。
+function expectedMemoryTokens() {
+  const forced = process.env.DSH_MEM_TEST_EXPECT
+  if (forced) return forced.split(',').map(s => s.trim()).filter(Boolean)
+
+  const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+  const patches = [
+    join(home, 'profiles', 'headless', 'cordis.patch.yml'),
+    join(home, 'cordis.patch.yml'),
+  ]
+  const tokens = []
+  for (const p of patches) {
+    if (!existsSync(p)) continue
+    const text = readFileSync(p, 'utf-8')
+    // 只认 memory-snapshot 条目下的 files 列表
+    const block = text.match(/id:\s*memory-snapshot[\s\S]*?files:\s*\n((?:[ \t]*-[ \t]*['"]?[^'"\n]+['"]?[ \t]*\n?)+)/)
+    if (!block) continue
+    for (const line of block[1].split('\n')) {
+      const m = line.match(/^[ \t]*-[ \t]*['"]?([^'"\n]+?)['"]?[ \t]*$/)
+      if (m) tokens.push(basename(m[1].trim()))
+    }
+  }
+  // 兜底：至少要给出一个 markdown 路径
+  return tokens.length ? tokens : ['.md']
+}
+
+// 凭据：dsh 的解析链是 继承环境 → $DSH_HOME/.credentials.yaml → 调用目录 .env → $DSH_HOME/.env。
+// 这里只覆盖最常用的三处（显式环境变量 / 调用目录 .env / $DSH_HOME/.env），
+// 找不到 key 时把实机会话用例标 SKIP —— 没配凭据是环境问题，不该报成插件失败。
+function loadCredentials() {
+  if (process.env.DEEPSEEK_API_KEY) return {}
+  const home = process.env.DSH_HOME || join(homedir(), '.dsh')
+  const files = [
+    process.env.DSH_MEM_TEST_ENV_FILE,
+    join(process.cwd(), '.env'),
+    join(home, '.env'),
+  ].filter(Boolean)
+  const extra = {}
+  for (const f of files) {
+    if (!existsSync(f)) continue
+    for (const line of readFileSync(f, 'utf-8').split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]*API_KEY)\s*=\s*(.+?)\s*$/)
+      if (m) extra[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
+    }
+  }
+  return extra
+}
+
 function e2eRealDsh() {
   console.log('  （dsh 需要网络 + 已安装，跑真实会话）')
   // Windows: dsh 是 fnm shim（.cmd），spawnSync 需 shell:true 才能解析
@@ -361,11 +413,20 @@ function e2eRealDsh() {
     assert.equal(dump.status, 0)
     assert.ok(dump.stdout.includes('memory-snapshot'))
   })
+
+  const creds = loadCredentials()
+  if (!process.env.DEEPSEEK_API_KEY && !Object.keys(creds).length) {
+    console.log('  [SKIP] 实机会话答出记忆路径（未找到 DEEPSEEK_API_KEY：export 它，或写入 $DSH_HOME/.env 后重跑）')
+    return
+  }
+
   const ask = spawnSync('dsh --profile headless "根据记忆快照，回答：记忆来自什么文件？只回答路径"',
-    { ...opts, timeout: 120000 })
+    { ...opts, timeout: 120000, env: { ...process.env, ...creds } })
   test('实机会话答出记忆路径', () => {
-    assert.equal(ask.status, 0)
-    assert.ok(ask.stdout.includes('MEMORY.md') || ask.stdout.includes('riven-hermes'))
+    assert.equal(ask.status, 0, `dsh 退出码非 0；stderr=${(ask.stderr || '').slice(0, 300)}`)
+    const expected = expectedMemoryTokens()
+    assert.ok(expected.some(t => ask.stdout.includes(t)),
+      `答案未命中配置中的文件名 ${JSON.stringify(expected)}；stdout=${ask.stdout.slice(0, 300)}`)
   })
 }
 
