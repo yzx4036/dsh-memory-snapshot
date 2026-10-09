@@ -28,6 +28,7 @@ export declare function apply(ctx: {
             name: string;
             order: number;
             text: string | (() => string);
+            interpolate?: boolean;
         }): void;
     };
 }, config: Config): void;
