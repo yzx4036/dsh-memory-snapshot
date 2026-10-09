@@ -41,7 +41,7 @@
   "author": "E_Ye <E_Ye@outlook.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yzx4036/dsh-memory-snapshot"
+    "url": "git+https://github.com/yzx4036/dsh-memory-snapshot.git"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
