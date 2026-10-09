@@ -14,6 +14,7 @@
 dsh-memory-snapshot/
 ├── src/index.ts    # 插件本体（TypeScript 源码）：函数形式 Cordis 插件（name/inject/apply + Config schema）
 ├── dist/           # tsc 构建产物，入库（用户 clone 即用，无需 toolchain）
+├── cordis.patch.yml # dsh.bundle 组合包层（`dsh plugin add` 通道；插件行按包名引用）
 ├── install.mjs     # 一键安装器：复制插件 + 合并 cordis.patch 到 DSH_HOME
 ├── package.json    # npm 包声明：exports/engines/scripts（可发布，见下）
 ├── README.md       # 中文主文档（含英文版链接）
@@ -72,14 +73,18 @@ install.mjs 两个实测修过的坑：
 
 另一个注意：`memory-snapshot` 别同时装到 home 层和某个 profile 层 —— 两行同 `id` 会让 `dsh` boot 报 `duplicate loader entry id`。要么装 home（全局），要么装指定 profile，二选一。`install.mjs` 只对**当前合并的 patch 文件**去重，不跨层检查。
 
-## npm 发布评估
+## 安装通道（as-built）
 
-本插件**当前以 install.mjs 为主路径**，但结构上可按 npm 发布（`package.json` 已配 `exports/engines/scripts`，`files` 收录插件与文档）。
+两条互斥路径（同 `id` 同时装两层会 `duplicate loader entry id`，**二选一**）：
 
-- **不发布**（当前推荐）：零依赖卖点是「拿过去就能用」。install.mjs 免注册表、免 `dsh plugin add`，对单文件小插件最省事。
-- **发布**（未来可选）：若走官方 `dsh.bundle` 路线，需在仓库根加 `cordis.patch.yml`（patch 用包名而非 `file:///`）+ `dsh.bundle.patch` 声明，然后 `dsh plugin add dsh-memory-snapshot`。参考 `docs/user/develop/basic/publish.md` 与 dsh-TUI 仓库。
+1. **install.mjs（home 层，`file:///` 引用）**——clone 仓库 + 一键脚本；免注册表、免 `dsh plugin add`；配绝对路径跨工作区生效。
+2. **dsh.bundle 组合包（profile 层，包名引用）**——标准生态通道。仓库根 `cordis.patch.yml` 声明组合包层，`package.json` 带 `dsh.bundle` manifest；`dsh plugin --profile <name> add` 四种来源，前三者已实测（2026-10-09，dsh 0.2.0-rc.2）：
+   - 本地目录：`add <repo 路径>`（pnpm link）
+   - tarball：`npm pack` → `add ./dsh-memory-snapshot-<ver>.tgz`
+   - github：`add github:yzx4036/dsh-memory-snapshot#<sha>`（dist/ 入库、无 prepare → pnpm 无需构建授权）
+   - npm：发布后 `add dsh-memory-snapshot`（npm 包名未被占用；发布清单见任务目录 `npm-publish-note.md`，实际 publish 待 npm 登录）
 
-两套路径 patch 引用方式不同（`file:///` vs 包名），互不冲突，选一条主线即可。
+   自定义：在自己的 profile `cordis.patch.yml` 里按 `id: memory-snapshot` 覆盖行（patch 语义 = 整行替换 `config`）。卸载：`dsh plugin --profile <name> remove dsh-memory-snapshot`（依赖与层一起移除）。
 
 ## 验证
 
