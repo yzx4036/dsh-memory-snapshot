@@ -10,10 +10,16 @@
   "files": [
     "dist/",
     "install.mjs",
+    "cordis.patch.yml",
     "README.md",
     "README.en.md",
     "LICENSE"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "node --check dist/index.js && node --check install.mjs",
