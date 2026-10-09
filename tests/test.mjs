@@ -511,6 +511,62 @@ async function e2eDistShape() {
   test('dist 导出 apply', () => assert.equal(typeof mod.apply, 'function'))
 }
 
+// ---------- e2e: install.mjs（隔离 DSH_HOME 演练）----------
+function e2eInstaller() {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-mem-inst-'))
+  const installer = join(ROOT, 'install.mjs')
+  const run = (args) => spawnSync(
+    process.execPath, [installer, '--yes', ...args],
+    { encoding: 'utf-8', env: { ...process.env, DSH_HOME: home }, timeout: 60000 }
+  )
+  const patchText = () => readFileSync(join(home, 'cordis.patch.yml'), 'utf-8')
+  const pluginFile = join(home, 'plugins', 'dsh-memory-snapshot', 'index.js')
+  try {
+    const r1 = run([])
+    test('install.mjs：全新安装创建 patch 条目与插件文件', () => {
+      assert.equal(r1.status, 0, r1.stderr)
+      assert.ok(patchText().includes('id: memory-snapshot'))
+      assert.ok(existsSync(pluginFile))
+    })
+    const r2 = run(['--update'])
+    test('install.mjs --update：刷新文件、patch 配置不动', () => {
+      assert.equal(r2.status, 0, r2.stderr)
+      assert.ok(r2.stdout.includes('plugin files refreshed'))
+      assert.ok(patchText().includes('id: memory-snapshot'))
+    })
+    const r3 = run(['--uninstall'])
+    test('install.mjs --uninstall：移除条目与文件', () => {
+      assert.equal(r3.status, 0, r3.stderr)
+      assert.ok(!patchText().includes('id: memory-snapshot'))
+      assert.ok(!existsSync(pluginFile))
+    })
+    test('install.mjs：--uninstall 与 --update 互斥（exit 2）', () => {
+      const r = run(['--uninstall', '--update'])
+      assert.equal(r.status, 2)
+      assert.ok(r.stderr.includes('mutually exclusive'))
+    })
+    // 跨层预检：另一 profile 以 bundle 形态引用 → 再装 home 应被拦截
+    const p2 = join(home, 'profiles', 'demo2')
+    mkdirSync(p2, { recursive: true })
+    writeFileSync(join(p2, 'package.json'),
+      JSON.stringify({ name: 'dsh-profile-demo2', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-memory-snapshot'] } } }),
+      'utf-8')
+    const r4 = run([])
+    test('install.mjs：跨层预检拦截（bundle 形态同样检出，exit 2）', () => {
+      assert.equal(r4.status, 2, `stdout=${r4.stdout} stderr=${r4.stderr}`)
+      assert.ok(r4.stderr.includes('duplicate loader entry id'))
+      assert.ok(r4.stderr.includes('profile:demo2'))
+    })
+    const r5 = run(['--force'])
+    test('install.mjs --force：跳过预检完成安装', () => {
+      assert.equal(r5.status, 0, r5.stderr)
+      assert.ok(patchText().includes('id: memory-snapshot'))
+    })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
 // ---------- e2e: 真实 dsh ----------
 
 // 期望关键词来自「实际安装的 patch 配置」，不是写死的默认文件名：
@@ -607,6 +663,8 @@ if (which === 'unit' || which === 'all') {
 if (which === 'e2e' || which === 'all') {
   console.log('—— e2e: dist 形状 ——')
   await e2eDistShape()
+  console.log('—— e2e: install.mjs ——')
+  e2eInstaller()
   console.log('—— e2e: 真实 dsh ——')
   e2eRealDsh()
 }
