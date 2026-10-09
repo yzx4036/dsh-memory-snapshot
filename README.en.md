@@ -4,7 +4,7 @@
 
 Zero-dependency lightweight snapshot (memory) injection plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). The whole point in one line: **the important markdown documents you've built up in Codex, Claude Code, Hermes, OpenCode and other Agent tools — constraint rules, long-term memory, or content from a knowledge-base repo — scattered across different directories. List their paths here, and dsh proactively injects them into every session, across all workspaces.** No moving files, no duplicate copies, no reminding the model to read them.
 
-> dsh is still in developer preview. Plugin APIs may change between releases — check the [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases) before upgrading.
+> **Compatibility**: requires dsh **0.2.x** (verified against 0.2.0-rc.2: assembly, injection, literal `{{}}` preservation). Earlier versions interpolate `{{variable}}` refs in section text with no opt-out — a memory file containing `{{name}}` fails the session. dsh is still in developer preview: check the [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases) before upgrading.
 
 ## Why
 
