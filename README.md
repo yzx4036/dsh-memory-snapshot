@@ -36,11 +36,24 @@ dsh 没有内置的全局记忆。它的 AGENTS.md 自动加载全局只认 `~/.
 
 ## 安装
 
+两条路径二选一（**别同时装两层**，同 `id` 会报 `duplicate loader entry id`）：
+
+**A. `dsh plugin add`（profile 级，标准生态通道）**
+
+```bash
+dsh plugin --profile <你的profile> add github:yzx4036/dsh-memory-snapshot
+# npm 发布后可直接装：dsh plugin --profile <你的profile> add dsh-memory-snapshot
+```
+
+卸载：`dsh plugin --profile <你的profile> remove dsh-memory-snapshot`
+
+**B. `node install.mjs`（home 级，免注册表）**
+
 ```bash
 node install.mjs        # 一键装好（自动找 DSH_HOME、复制插件、写入配置）
 ```
 
-> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检。别同时装 home 和 profile 两层，会报 `duplicate loader entry id`，二选一。
+> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检。
 
 ## 使用
 

@@ -36,11 +36,24 @@ Doesn't (need these → look at the memory-engine plugins):
 
 ## Install
 
+Two mutually exclusive ways (**don't install at both levels** — the same `id` triggers `duplicate loader entry id`):
+
+**A. `dsh plugin add` (profile-level, standard ecosystem path)**
+
+```bash
+dsh plugin --profile <your-profile> add github:yzx4036/dsh-memory-snapshot
+# once published to npm: dsh plugin --profile <your-profile> add dsh-memory-snapshot
+```
+
+Uninstall: `dsh plugin --profile <your-profile> remove dsh-memory-snapshot`
+
+**B. `node install.mjs` (home-level, registry-free)**
+
 ```bash
 node install.mjs        # one command: locate DSH_HOME, copy the plugin, write config
 ```
 
-> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install. Don't install at both home and profile levels — you'll hit `duplicate loader entry id`; pick one.
+> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install.
 
 ## Usage
 
