@@ -42,8 +42,8 @@ dsh 没有内置的全局记忆。它的 AGENTS.md 自动加载全局只认 `~/.
 **A. `dsh plugin add`（profile 级，标准生态通道）**
 
 ```bash
-dsh plugin --profile <你的profile> add github:yzx4036/dsh-memory-snapshot
-# npm 发布后可直接装：dsh plugin --profile <你的profile> add dsh-memory-snapshot
+dsh plugin --profile <你的profile> add dsh-memory-snapshot
+# 或从 GitHub 直装（镜像未同步/离线场景）：dsh plugin --profile <你的profile> add github:yzx4036/dsh-memory-snapshot
 ```
 
 卸载：`dsh plugin --profile <你的profile> remove dsh-memory-snapshot`

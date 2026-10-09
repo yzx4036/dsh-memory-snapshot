@@ -42,8 +42,8 @@ Two mutually exclusive ways (**don't install at both levels** — the same `id` 
 **A. `dsh plugin add` (profile-level, standard ecosystem path)**
 
 ```bash
-dsh plugin --profile <your-profile> add github:yzx4036/dsh-memory-snapshot
-# once published to npm: dsh plugin --profile <your-profile> add dsh-memory-snapshot
+dsh plugin --profile <your-profile> add dsh-memory-snapshot
+# or straight from GitHub: dsh plugin --profile <your-profile> add github:yzx4036/dsh-memory-snapshot
 ```
 
 Uninstall: `dsh plugin --profile <your-profile> remove dsh-memory-snapshot`

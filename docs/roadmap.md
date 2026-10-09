@@ -11,6 +11,7 @@
 | 6 | 注入新鲜度标记 | `freshness`（默认开）：快照头带生成时间、各文件头带最后修改时间 |
 | 7 | skipMissing 选项 | `skipMissing`（默认关）：缺失/不可读条目静默跳过——多设备路径不一致场景 |
 | 9 | install.mjs --uninstall/--update | 补卸载/更新路径 + 跨层 duplicate-id 预检（bundle 安装形态一并检出） |
+| 8 | npm publish 执行 | 已发布 `dsh-memory-snapshot@0.3.0`（2026-10-09）；npm 通道实测可装可卸 |
 
 ## v0.2.0（已完成）
 
@@ -38,9 +39,7 @@
 
 ## 后续版本（按优先级）
 
-| # | 项目 | 说明 |
-|---|------|------|
-| 8 | npm publish 执行 | dsh.bundle 路线与三通道已就绪（v0.2.0）；待 npm 登录后 `npm publish`，随后提交社区目录收录（dshbase / Oh-My-DSH） |
+（当前无排期项；新想法按需立条目。候选方向：dry-run 预览、e2e CI job、npm 自动发布。）
 
 ## 明确不做
 

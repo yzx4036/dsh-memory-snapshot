@@ -91,11 +91,11 @@ install.mjs 两个实测修过的坑：
 两条互斥路径（同 `id` 同时装两层会 `duplicate loader entry id`，**二选一**）：
 
 1. **install.mjs（home 层，`file:///` 引用）**——clone 仓库 + 一键脚本；免注册表、免 `dsh plugin add`；配绝对路径跨工作区生效。
-2. **dsh.bundle 组合包（profile 层，包名引用）**——标准生态通道。仓库根 `cordis.patch.yml` 声明组合包层，`package.json` 带 `dsh.bundle` manifest；`dsh plugin --profile <name> add` 四种来源，前三者已实测（2026-10-09，dsh 0.2.0-rc.2）：
+2. **dsh.bundle 组合包（profile 层，包名引用）**——标准生态通道。仓库根 `cordis.patch.yml` 声明组合包层，`package.json` 带 `dsh.bundle` manifest；`dsh plugin --profile <name> add` 四种来源均已实测（2026-10-09，dsh 0.2.0-rc.2）：
+   - npm：`add dsh-memory-snapshot`（已发布，v0.3.0）
    - 本地目录：`add <repo 路径>`（pnpm link）
    - tarball：`npm pack` → `add ./dsh-memory-snapshot-<ver>.tgz`
    - github：`add github:yzx4036/dsh-memory-snapshot#<sha>`（dist/ 入库、无 prepare → pnpm 无需构建授权）
-   - npm：发布后 `add dsh-memory-snapshot`（npm 包名未被占用；发布清单见任务目录 `npm-publish-note.md`，实际 publish 待 npm 登录）
 
    自定义：在自己的 profile `cordis.patch.yml` 里按 `id: memory-snapshot` 覆盖行（patch 语义 = 整行替换 `config`）。卸载：`dsh plugin --profile <name> remove dsh-memory-snapshot`（依赖与层一起移除）。
 
