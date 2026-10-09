@@ -110,6 +110,8 @@ async function unitApply() {
 
     test('apply 注册 section 一次', () => assert.equal(sections.length, 1))
     test('section order 来自 config', () => assert.equal(sections[0].order, 40))
+    test('section 标记 interpolate: false（dsh 0.2.x 需按字面量注入）', () =>
+      assert.equal(sections[0].interpolate, false))
 
     const text1 = sections[0].text()
     test('注入文件内容', () => assert.ok(text1.includes('TEST-42')))

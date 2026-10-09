@@ -4,7 +4,7 @@
 
 零依赖的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）轻量快照（记忆）注入插件。宗旨：**你在 Codex、Claude Code、Hermes、OpenCode 等 Agent 工具里攒的重要 markdown 文档——约束规则、长期记忆，或者知识库仓库里的内容——散在不同目录，把路径列进来，dsh 每次会话都会主动注入，跨工作区生效**。不用迁文件、不用复制副本、不用提醒模型去读。
 
-> dsh 还是开发者预览版，插件 API 可能随版本变化，升级前看 [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases)。
+> **兼容性**：要求 dsh **0.2.x**（实测核验 0.2.0-rc.2：装配、注入、`{{}}` 字面量保留）。更早版本对 section 文本做不可关闭的 `{{变量}}` 插值，记忆文件含 `{{名字}}` 会导致会话失败。dsh 仍是开发者预览版，升级前看 [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases)。
 
 ## 为什么做这个
 
@@ -36,11 +36,24 @@ dsh 没有内置的全局记忆。它的 AGENTS.md 自动加载全局只认 `~/.
 
 ## 安装
 
+两条路径二选一（**别同时装两层**，同 `id` 会报 `duplicate loader entry id`）：
+
+**A. `dsh plugin add`（profile 级，标准生态通道）**
+
+```bash
+dsh plugin --profile <你的profile> add github:yzx4036/dsh-memory-snapshot
+# npm 发布后可直接装：dsh plugin --profile <你的profile> add dsh-memory-snapshot
+```
+
+卸载：`dsh plugin --profile <你的profile> remove dsh-memory-snapshot`
+
+**B. `node install.mjs`（home 级，免注册表）**
+
 ```bash
 node install.mjs        # 一键装好（自动找 DSH_HOME、复制插件、写入配置）
 ```
 
-> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检。别同时装 home 和 profile 两层，会报 `duplicate loader entry id`，二选一。
+> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检。
 
 ## 使用
 

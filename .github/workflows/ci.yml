@@ -1,0 +1,28 @@
+# CI：构建 + 语法 + 单元测试。
+# e2e（真实 dsh 装配/会话）需要本机 dsh 与凭证，不在 CI 运行——本地跑 `npm test`。
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: 安装开发依赖（仅 typescript）
+        run: npm install --no-audit --no-fund
+      - name: 构建（tsc）
+        run: npm run build
+      - name: 语法检查（node --check）
+        run: npm run check
+      - name: 单元测试
+        run: node tests/test.mjs unit

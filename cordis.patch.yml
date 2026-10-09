@@ -1,0 +1,14 @@
+# dsh-memory-snapshot — bundle layer (installed via `dsh plugin add`).
+# The plugin row references this package by name; Node module resolution then
+# finds the built entry (dist/index.js). To customize, override the row by
+# `id` in your own profile's cordis.patch.yml — a later layer replaces the
+# whole `config` value of a row with the same `id`.
+- insert:
+    - id: memory-snapshot
+      name: dsh-memory-snapshot
+      config:
+        files:
+          - '~/MEMORY.md'
+        maxBytes: 3000
+        order: 50
+        marker: 'MEMORY-SNAPSHOT'

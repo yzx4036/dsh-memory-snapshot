@@ -4,7 +4,7 @@
 
 Zero-dependency lightweight snapshot (memory) injection plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh). The whole point in one line: **the important markdown documents you've built up in Codex, Claude Code, Hermes, OpenCode and other Agent tools — constraint rules, long-term memory, or content from a knowledge-base repo — scattered across different directories. List their paths here, and dsh proactively injects them into every session, across all workspaces.** No moving files, no duplicate copies, no reminding the model to read them.
 
-> dsh is still in developer preview. Plugin APIs may change between releases — check the [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases) before upgrading.
+> **Compatibility**: requires dsh **0.2.x** (verified against 0.2.0-rc.2: assembly, injection, literal `{{}}` preservation). Earlier versions interpolate `{{variable}}` refs in section text with no opt-out — a memory file containing `{{name}}` fails the session. dsh is still in developer preview: check the [breaking changes](https://github.com/deepseek-ai/deepseek-harness/releases) before upgrading.
 
 ## Why
 
@@ -36,11 +36,24 @@ Doesn't (need these → look at the memory-engine plugins):
 
 ## Install
 
+Two mutually exclusive ways (**don't install at both levels** — the same `id` triggers `duplicate loader entry id`):
+
+**A. `dsh plugin add` (profile-level, standard ecosystem path)**
+
+```bash
+dsh plugin --profile <your-profile> add github:yzx4036/dsh-memory-snapshot
+# once published to npm: dsh plugin --profile <your-profile> add dsh-memory-snapshot
+```
+
+Uninstall: `dsh plugin --profile <your-profile> remove dsh-memory-snapshot`
+
+**B. `node install.mjs` (home-level, registry-free)**
+
 ```bash
 node install.mjs        # one command: locate DSH_HOME, copy the plugin, write config
 ```
 
-> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install. Don't install at both home and profile levels — you'll hit `duplicate loader entry id`; pick one.
+> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install.
 
 ## Usage
 

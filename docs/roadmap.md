@@ -2,6 +2,14 @@
 
 > 迭代方向，按优先级排列。编号沿用规划时的序号。原则：保持零依赖、单向只读注入的定位；不做记忆引擎功能（自动吸收、蒸馏、检索、模型侧写回）。
 
+## v0.2.0（已完成）
+
+| # | 项目 | 说明 |
+|---|------|------|
+| 11 | 适配 dsh 0.2.x | section 注册 `interpolate: false`——0.2.x 对 section 文本默认严格插值 `{{变量}}`，记忆文件含 `{{名字}}` 会令会话失败；已在 0.2.0-rc.2 实测核验（装配取证 + 字面量保留） |
+| 8 | npm 发布（dsh.bundle 路线） | 仓库根 `cordis.patch.yml` + `package.json` 的 `dsh.bundle` manifest；本地目录 / tarball / github 三通道实测可装可卸；npm publish 待登录后执行 |
+| 10 | CI | GitHub Actions：build + check + unit（node 22/24 矩阵），首跑绿 |
+
 ## v0.1.3（已完成）
 
 | # | 项目 | 说明 |
@@ -27,8 +35,7 @@
 | 6 | 注入新鲜度标记 | section 头部带快照生成时间与各文件 mtime，供模型判断记忆可能过时 |
 | 7 | skipMissing 选项 | 读取失败的文件静默跳过（多设备路径不一致场景），不注入错误文本 |
 | 9 | install.mjs --uninstall/--update | 补卸载/更新路径 + 跨层（home/profile）duplicate id 预检 |
-| 10 | CI | GitHub Actions：build + check + unit（e2e 依赖真实 dsh，单独 job 或跳过） |
-| 8 | npm 发布（dsh.bundle 路线） | 等 dsh 插件 API 稳定后走 `dsh plugin add`；见 architecture.md「npm 发布评估」 |
+| 8 | npm publish 执行 | dsh.bundle 路线与三通道已就绪（v0.2.0）；待 npm 登录后 `npm publish`，随后提交社区目录收录（dshbase / Oh-My-DSH） |
 
 ## 明确不做
 

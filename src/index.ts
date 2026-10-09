@@ -182,7 +182,7 @@ function loadSnapshot(files: string[], maxBytes: number, totalMaxBytes: number):
   return parts.join('\n\n') + skipNote + errorNote
 }
 
-export function apply(ctx: { systemPrompt: { section(opt: { name: string; order: number; text: string | (() => string) }): void } }, config: Config) {
+export function apply(ctx: { systemPrompt: { section(opt: { name: string; order: number; text: string | (() => string); interpolate?: boolean }): void } }, config: Config) {
   // config is the second argument (merged with defaults) per the Cordis
   // object/function plugin convention. The Schema has already been run by
   // Cordis, so the fields are validated; the spread guards a bare invocation.
@@ -200,6 +200,11 @@ export function apply(ctx: { systemPrompt: { section(opt: { name: string; order:
   ctx.systemPrompt.section({
     name: 'memory-snapshot',
     order,
+    // Keep the snapshot literal: dsh 0.2.x interpolates `{{variable}}` refs in
+    // sections by default and throws on unknown names — a memory file that
+    // contains `{{foo}}` would otherwise kill the whole session (verified on
+    // 0.2.0-rc.2). Memory files are raw user content, so never interpolate.
+    interpolate: false,
     text: () => [
       `${marker}-MARKER: 用户记忆快照已注入。`,
       '以下是用户的长期记忆文件（持久化，跨会话持续有效，回答用户问题时优先参考）：',
