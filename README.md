@@ -22,10 +22,11 @@ dsh 没有内置的全局记忆。它的 AGENTS.md 自动加载全局只认 `~/.
 
 能做：
 
-- 一个或多个 md 文件，任意目录（支持 `~`），每次会话装配提示词时全文注入
+- 一个或多个 md 文件或**目录**（支持 `~`），每次会话装配提示词时全文注入；目录自动收集 `*.md`（`dirDepth` 控制递归深度）
 - 改完文件下次会话就生效
 - 单文件字节上限（`maxBytes`），按 UTF-8 字节截断、回退到换行边界，并追加「已截断」标记；另有总预算（`totalMaxBytes`）防多文件合计撑爆
-- 读不到的文件标出原因，不崩会话
+- 自动剥离文件头 YAML front-matter（`stripFrontMatter`）；快照头带生成时间、各文件带最后修改时间（`freshness`）
+- 读不到的文件标出原因（可配 `skipMissing` 静默跳过），不崩会话
 - 注入内容进 Trajectory 日志，模型吃了什么随时能查
 
 不能做（要这些就去找记忆引擎插件）：
@@ -53,7 +54,7 @@ dsh plugin --profile <你的profile> add github:yzx4036/dsh-memory-snapshot
 node install.mjs        # 一键装好（自动找 DSH_HOME、复制插件、写入配置）
 ```
 
-> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检。
+> 其他选项：`--profile headless` 只装某个 profile；`--files A.md,B.md` 顺带配好记忆文件；`--verify` 装完自检；`--update` 只刷新插件文件（保留配置）；`--uninstall` 卸载（移除文件与配置条目）；跨层已有同名条目时安装会被拦截（`--force` 跳过预检）。
 
 ## 使用
 
@@ -67,9 +68,13 @@ dsh --profile headless "你的记忆快照里有什么？"
 
 常用配置：
 
-- `files`：文档路径清单，默认 `['./MEMORY.md']`，可写多个。**跨工作区生效请用绝对路径或 `~`**——相对路径按 dsh 启动目录解析，会变成「每个工作区各找各的」
+- `files`：路径清单（文件或目录），默认 `['./MEMORY.md']`，可写多个；目录会收集其中 `*.md`。**跨工作区生效请用绝对路径或 `~`**——相对路径按 dsh 启动目录解析，会变成「每个工作区各找各的」
 - `maxBytes`：单个文件注入上限，默认 3000 字节（按 UTF-8 字节截断，不切断多字节字符，回退到换行边界）
 - `totalMaxBytes`：所有文件合计注入字节上限，默认 `0`（不设总上限）。超出时按 `files` 顺序跳过并在末尾标注
+- `dirDepth`：目录递归深度，默认 `1`（仅直属文件；`2` 含一层子目录）。递归时跳过 `.` 开头的目录
+- `skipMissing`：默认 `false`（缺失项在注脚列出）；`true` 静默跳过——多设备路径不一致时用
+- `freshness`：默认 `true`——快照头带生成时间、每个文件头带最后修改时间；`false` 关闭
+- `stripFrontMatter`：默认 `true`——剥离文件头 YAML front-matter（未闭合不剥）；`false` 保留
 - `order`：section 顺序，默认 50
 - `marker`：标记前缀，默认 `MEMORY-SNAPSHOT`
 
@@ -82,7 +87,7 @@ dsh --profile headless "你的记忆快照里有什么？"
 ## 测试
 
 ```bash
-npm test                # 40 条自动化测试（含真实 dsh 会话）
+npm test                # 66 条自动化测试（unit 54 + e2e 12；实机会话用例需凭证，无则跳过）
 ```
 
 手动验收（可选，完整 7 步见 [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)）：

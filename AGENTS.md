@@ -25,7 +25,7 @@
   ```
 - `inject` 声明服务依赖；`systemPrompt` 是注册在 `@deepseek-ai/cordis` `Context` 上的服务。等它就绪才加载。
 - `Config` 用手写 Standard Schema 接口（`~standard`），**零依赖、合法**。zod/Schemastery 只是这接口的包装。schema 填充默认值 → `apply` 收到的 config 是完整合并后的。
-- 调用 `ctx.systemPrompt.section({ name, order, text })` 注入 section，签名见 `packages/core/system-prompt` 的 `PromptSection`。`text` 可用 provider 函数 `(context) => string`，每次装配时才算。
+- 调用 `ctx.systemPrompt.section({ name, order, text, interpolate: false })` 注入 section，签名见 `packages/core/system-prompt` 的 `PromptSection`。`text` 可用 provider 函数 `(context) => string`，每次装配时才算。`interpolate: false` 必需——0.2.x 默认对 section 文本严格插值 `{{变量}}`，未知名即抛错（记忆文件含 `{{foo}}` 会崩会话）。
 - 关键坑：`apply(ctx, config)` 的 **config 是第二参数**，不是 `ctx.plugin.config`。
 
 ## 如何构建 / 验证
@@ -33,7 +33,7 @@
 ```bash
 npm run build      # tsc -p tsconfig.json → dist/（改 src 后必须 build）
 npm run check      # node --check dist/index.js + install.mjs（语法）
-npm run test       # tests/test.mjs：34 unit + 7 e2e（含真实 dsh 会话，需网络）
+npm run test       # tests/test.mjs：54 unit + 12 e2e（含真实 dsh 装配检查，需网络）
                    # 实机会话需要凭据：DEEPSEEK_API_KEY 在环境里，或写 $DSH_HOME/.env
                    # 都没配时该用例标 SKIP（不算失败），其余照跑
 npm run smoke      # dsh --profile headless --dump-config | grep memory-snapshot
@@ -60,3 +60,4 @@ node install.mjs --verify   # 部署 dist 后自检
 2. **`package.json` 要 `"type": "module"`** —— 安装到 `$DSH_HOME/plugins/` 时也写最小 ESM package.json，否则 `MODULE_TYPELESS_PACKAGE_JSON` 警告。
 3. **Windows 路径用 `file:///` URL**（`pathToFileURL`）—— patch 里 `name` 反斜杠会炸。
 4. **build 环境零依赖** —— 别顺手引入第三方包；若官方标准硬性要求依赖才加，且要在 README/架构说明理由，别悄悄引。
+5. **section 必须 `interpolate: false`** —— dsh 0.2.x 对 section 文本默认严格插值 `{{变量}}` 且未知名抛错；记忆快照是用户原文，必须字面量注入。
