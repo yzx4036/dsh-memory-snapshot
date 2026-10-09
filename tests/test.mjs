@@ -14,7 +14,7 @@
 //  [e2e]  dist 构建产物加载形状
 //  [e2e]  真实 dsh：dump-config 含 memory-snapshot + 实机会话
 import { strict as assert } from 'node:assert'
-import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir, homedir } from 'node:os'
 import { join, basename } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -95,6 +95,23 @@ async function unitConfig() {
     assert.ok('value' in r)
     assert.equal(r.value.totalMaxBytes, 0)
   })
+  test('Config 新字段默认值（dirDepth=1 / skipMissing=false / freshness=true / stripFrontMatter=true）', () => {
+    const r = Config['~standard'].validate({ files: ['a.md'] })
+    assert.equal(r.value.dirDepth, 1)
+    assert.equal(r.value.skipMissing, false)
+    assert.equal(r.value.freshness, true)
+    assert.equal(r.value.stripFrontMatter, true)
+  })
+  test('Config dirDepth 非法（0 / -1 / 1.5 / 非数）→ issues', () => {
+    for (const bad of [0, -1, 1.5, 'x']) {
+      assert.ok('issues' in Config['~standard'].validate({ dirDepth: bad }), `dirDepth=${bad}`)
+    }
+  })
+  test('Config skipMissing/freshness/stripFrontMatter 非布尔 → issues', () => {
+    assert.ok('issues' in Config['~standard'].validate({ skipMissing: 'yes' }))
+    assert.ok('issues' in Config['~standard'].validate({ freshness: 1 }))
+    assert.ok('issues' in Config['~standard'].validate({ stripFrontMatter: null }))
+  })
 }
 
 // ---------- unit: apply() + text provider ----------
@@ -138,10 +155,20 @@ async function unitApply() {
 // ---------- unit: 截断 / 总预算 ----------
 // 提取单个文件注入的 body（header 之后、收尾分隔之前）。
 function extractBody(text, raw) {
-  const header = `--- ${raw} ---\n`
-  const start = text.indexOf(header)
-  assert.ok(start !== -1, `header 存在: ${raw}`)
-  const bodyStart = start + header.length
+  // Header formats: `--- <raw> ---` (freshness off) or
+  // `--- <raw> (最后修改: <time>) ---` (freshness on).
+  let bodyStart
+  const fresh = text.indexOf(`--- ${raw} (最后修改: `)
+  if (fresh !== -1) {
+    const close = text.indexOf(') ---\n', fresh)
+    assert.ok(close !== -1, `header 收尾存在: ${raw}`)
+    bodyStart = close + 6 // ') ---\n'.length
+  } else {
+    const header = `--- ${raw} ---\n`
+    const start = text.indexOf(header)
+    assert.ok(start !== -1, `header 存在: ${raw}`)
+    bodyStart = start + header.length
+  }
   const end = text.indexOf('\n---\n记忆快照结束', bodyStart)
   assert.ok(end !== -1, 'body 收尾分隔存在')
   return text.slice(bodyStart, end)
@@ -150,9 +177,12 @@ function extractBody(text, raw) {
 async function unitTruncation() {
   const mod = await loadPlugin()
   const tmp = mkdtempSync(join(tmpdir(), 'dsh-mem-trunc-'))
+  // 截断/预算断言与 header 格式解耦：显式关闭 freshness / stripFrontMatter，
+  // 使注入字节数可精确预期（这两项行为由 unitSnapshotFeatures 专测）。
   const applyWith = (config) => {
     const sections = []
-    mod.apply({ systemPrompt: { section: (s) => sections.push(s) } }, config)
+    mod.apply({ systemPrompt: { section: (s) => sections.push(s) } },
+      { freshness: false, stripFrontMatter: false, ...config })
     return sections[0].text()
   }
   try {
@@ -343,6 +373,134 @@ async function unitTruncation() {
   }
 }
 
+// ---------- unit: 目录 / skipMissing / freshness / front-matter ----------
+async function unitSnapshotFeatures() {
+  const mod = await loadPlugin()
+  const tmp = mkdtempSync(join(tmpdir(), 'dsh-mem-feat-'))
+  const applyWith = (config) => {
+    const sections = []
+    mod.apply({ systemPrompt: { section: (s) => sections.push(s) } }, config)
+    return sections[0].text()
+  }
+  const base = { maxBytes: 1000, order: 40, marker: 'TEST', freshness: false, stripFrontMatter: false }
+  try {
+    // ---- F1：目录支持 ----
+    const dir = join(tmp, 'notes')
+    mkdirSync(join(dir, 'sub'), { recursive: true })
+    mkdirSync(join(dir, '.hidden'), { recursive: true })
+    writeFileSync(join(dir, 'a.md'), 'ALPHA', 'utf-8')
+    writeFileSync(join(dir, 'b.md'), 'BETA', 'utf-8')
+    writeFileSync(join(dir, 'UPPER.MD'), 'UPPER', 'utf-8')
+    writeFileSync(join(dir, 'skip.txt'), 'TXT-SHOULD-NOT-APPEAR', 'utf-8')
+    writeFileSync(join(dir, 'sub', 'c.md'), 'GAMMA', 'utf-8')
+    writeFileSync(join(dir, '.hidden', 'h.md'), 'HIDDEN', 'utf-8')
+
+    const d1 = applyWith({ ...base, files: [dir] })
+    test('目录收集：直属 *.md 注入（后缀大小写不敏感）', () => {
+      assert.ok(d1.includes('ALPHA') && d1.includes('BETA') && d1.includes('UPPER'))
+    })
+    test('目录收集：跳过非 md 文件与 dot 目录', () => {
+      assert.ok(!d1.includes('TXT-SHOULD-NOT-APPEAR'))
+      assert.ok(!d1.includes('HIDDEN'))
+    })
+    test('目录收集：dirDepth=1 不递归子目录', () => {
+      assert.ok(!d1.includes('GAMMA'))
+    })
+    test('目录收集：字典序（UPPER.MD 在 a.md 之前）', () => {
+      const iUpper = d1.indexOf(`--- ${dir}/UPPER.MD ---`)
+      const iA = d1.indexOf(`--- ${dir}/a.md ---`)
+      const iB = d1.indexOf(`--- ${dir}/b.md ---`)
+      assert.ok(iUpper !== -1 && iA !== -1 && iB !== -1, '三个 header 都出现')
+      assert.ok(iUpper < iA && iA < iB)
+    })
+    const d2 = applyWith({ ...base, files: [dir], dirDepth: 2 })
+    test('目录收集：dirDepth=2 含一层子目录', () => {
+      assert.ok(d2.includes('GAMMA'))
+      assert.ok(!d2.includes('HIDDEN'))
+    })
+
+    const emptyDir = join(tmp, 'empty-dir')
+    mkdirSync(emptyDir)
+    const emptyDirText = applyWith({ ...base, files: [emptyDir] })
+    test('空目录：「目录中无 .md 文件」注记', () => {
+      assert.ok(emptyDirText.includes('目录中无 .md 文件'))
+    })
+
+    // ---- F2：skipMissing ----
+    const missingFile = join(tmp, 'missing.md')
+    const okFile = join(tmp, 'present.md')
+    writeFileSync(okFile, 'PRESENT-CONTENT', 'utf-8')
+    const loud = applyWith({ ...base, files: [missingFile, okFile] })
+    test('skipMissing=false（默认）：缺失项在注记中列出', () => {
+      assert.ok(loud.includes('PRESENT-CONTENT'))
+      assert.ok(loud.includes('部分文件读取失败'))
+      assert.ok(loud.includes(missingFile))
+    })
+    const quiet = applyWith({ ...base, files: [missingFile, okFile], skipMissing: true })
+    test('skipMissing=true：缺失项静默、其余照常注入', () => {
+      assert.ok(quiet.includes('PRESENT-CONTENT'))
+      assert.ok(!quiet.includes('部分文件读取失败'))
+      assert.ok(!quiet.includes(missingFile))
+    })
+    const allGone = applyWith({ ...base, files: [missingFile], skipMissing: true })
+    test('skipMissing=true 且全部缺失：最小提示（不列路径）', () => {
+      assert.ok(allGone.includes('MEMORY-SNAPSHOT-ERROR'))
+      assert.ok(allGone.includes('已跳过 1 个'))
+      assert.ok(!allGone.includes(missingFile))
+    })
+
+    // ---- F3：freshness ----
+    const freshFile = join(tmp, 'fresh.md')
+    writeFileSync(freshFile, 'FRESH-CONTENT', 'utf-8')
+    const freshDefault = applyWith({ files: [freshFile], maxBytes: 1000, order: 40, marker: 'TEST' })
+    test('freshness 默认开启：快照生成时间 + 文件 mtime', () => {
+      assert.ok(/快照生成时间：\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}/.test(freshDefault))
+      assert.ok(freshDefault.includes(`--- ${freshFile} (最后修改: `))
+    })
+    const noFresh = applyWith({ ...base, files: [freshFile] })
+    test('freshness=false：无时间信息', () => {
+      assert.ok(!noFresh.includes('快照生成时间'))
+      assert.ok(!noFresh.includes('最后修改'))
+      assert.ok(noFresh.includes(`--- ${freshFile} ---`))
+    })
+
+    // ---- F4：front-matter 剥离 ----
+    const fmFile = join(tmp, 'fm.md')
+    writeFileSync(fmFile, '---\ntitle: 标题\ntags: [a, b]\n---\n正文内容 FM-BODY\n', 'utf-8')
+    const fmStripped = applyWith({ files: [fmFile], maxBytes: 1000, order: 40, marker: 'TEST', freshness: false })
+    test('front-matter 默认剥离（保留正文）', () => {
+      assert.ok(fmStripped.includes('FM-BODY'))
+      assert.ok(!fmStripped.includes('title:'))
+    })
+    const fmKept = applyWith({ ...base, files: [fmFile], stripFrontMatter: false })
+    test('stripFrontMatter=false 保留原文', () => {
+      assert.ok(fmKept.includes('title:'))
+    })
+    const fmDots = join(tmp, 'fm-dots.md')
+    writeFileSync(fmDots, '---\nkey: v\n...\nDOTS-BODY\n', 'utf-8')
+    const fmDotsText = applyWith({ files: [fmDots], maxBytes: 1000, order: 40, marker: 'TEST', freshness: false })
+    test('front-matter 以 ... 收尾同样剥离', () => {
+      assert.ok(fmDotsText.includes('DOTS-BODY'))
+      assert.ok(!fmDotsText.includes('key: v'))
+    })
+    const fmOpen = join(tmp, 'fm-open.md')
+    writeFileSync(fmOpen, '---\nnever closed\nOPEN-BODY\n', 'utf-8')
+    const fmOpenText = applyWith({ files: [fmOpen], maxBytes: 1000, order: 40, marker: 'TEST', freshness: false })
+    test('未闭合 front-matter 不剥离（保守）', () => {
+      assert.ok(fmOpenText.includes('never closed') && fmOpenText.includes('OPEN-BODY'))
+    })
+    const fmBig = join(tmp, 'fm-big.md')
+    writeFileSync(fmBig, '---\n' + 'x'.repeat(200) + '\n---\nTAIL-OK\n', 'utf-8')
+    const fmBigText = applyWith({ files: [fmBig], maxBytes: 20, order: 40, marker: 'TEST', freshness: false })
+    test('剥离先于截断（省下 front-matter 的预算给正文）', () => {
+      assert.ok(fmBigText.includes('TAIL-OK'))
+      assert.ok(!fmBigText.includes('xxxxxxxxxx'))
+    })
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
 // ---------- e2e: dist 产物形状 ----------
 async function e2eDistShape() {
   test('dist/index.js 存在', () => assert.ok(existsSync(join(ROOT, 'dist', 'index.js'))))
@@ -351,6 +509,62 @@ async function e2eDistShape() {
   test('dist 导出 inject', () => assert.deepEqual(mod.inject, ['systemPrompt']))
   test('dist 导出 Config(~standard)', () => assert.ok(mod.Config && mod.Config['~standard']))
   test('dist 导出 apply', () => assert.equal(typeof mod.apply, 'function'))
+}
+
+// ---------- e2e: install.mjs（隔离 DSH_HOME 演练）----------
+function e2eInstaller() {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-mem-inst-'))
+  const installer = join(ROOT, 'install.mjs')
+  const run = (args) => spawnSync(
+    process.execPath, [installer, '--yes', ...args],
+    { encoding: 'utf-8', env: { ...process.env, DSH_HOME: home }, timeout: 60000 }
+  )
+  const patchText = () => readFileSync(join(home, 'cordis.patch.yml'), 'utf-8')
+  const pluginFile = join(home, 'plugins', 'dsh-memory-snapshot', 'index.js')
+  try {
+    const r1 = run([])
+    test('install.mjs：全新安装创建 patch 条目与插件文件', () => {
+      assert.equal(r1.status, 0, r1.stderr)
+      assert.ok(patchText().includes('id: memory-snapshot'))
+      assert.ok(existsSync(pluginFile))
+    })
+    const r2 = run(['--update'])
+    test('install.mjs --update：刷新文件、patch 配置不动', () => {
+      assert.equal(r2.status, 0, r2.stderr)
+      assert.ok(r2.stdout.includes('plugin files refreshed'))
+      assert.ok(patchText().includes('id: memory-snapshot'))
+    })
+    const r3 = run(['--uninstall'])
+    test('install.mjs --uninstall：移除条目与文件', () => {
+      assert.equal(r3.status, 0, r3.stderr)
+      assert.ok(!patchText().includes('id: memory-snapshot'))
+      assert.ok(!existsSync(pluginFile))
+    })
+    test('install.mjs：--uninstall 与 --update 互斥（exit 2）', () => {
+      const r = run(['--uninstall', '--update'])
+      assert.equal(r.status, 2)
+      assert.ok(r.stderr.includes('mutually exclusive'))
+    })
+    // 跨层预检：另一 profile 以 bundle 形态引用 → 再装 home 应被拦截
+    const p2 = join(home, 'profiles', 'demo2')
+    mkdirSync(p2, { recursive: true })
+    writeFileSync(join(p2, 'package.json'),
+      JSON.stringify({ name: 'dsh-profile-demo2', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-memory-snapshot'] } } }),
+      'utf-8')
+    const r4 = run([])
+    test('install.mjs：跨层预检拦截（bundle 形态同样检出，exit 2）', () => {
+      assert.equal(r4.status, 2, `stdout=${r4.stdout} stderr=${r4.stderr}`)
+      assert.ok(r4.stderr.includes('duplicate loader entry id'))
+      assert.ok(r4.stderr.includes('profile:demo2'))
+    })
+    const r5 = run(['--force'])
+    test('install.mjs --force：跳过预检完成安装', () => {
+      assert.equal(r5.status, 0, r5.stderr)
+      assert.ok(patchText().includes('id: memory-snapshot'))
+    })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 }
 
 // ---------- e2e: 真实 dsh ----------
@@ -443,10 +657,14 @@ if (which === 'unit' || which === 'all') {
   await unitApply()
   console.log('—— unit: 截断 / 总预算 ——')
   await unitTruncation()
+  console.log('—— unit: 目录 / skipMissing / freshness / front-matter ——')
+  await unitSnapshotFeatures()
 }
 if (which === 'e2e' || which === 'all') {
   console.log('—— e2e: dist 形状 ——')
   await e2eDistShape()
+  console.log('—— e2e: install.mjs ——')
+  e2eInstaller()
   console.log('—— e2e: 真实 dsh ——')
   e2eRealDsh()
 }

@@ -4,6 +4,10 @@ export interface Config {
     files: string[];
     maxBytes: number;
     totalMaxBytes: number;
+    dirDepth: number;
+    skipMissing: boolean;
+    freshness: boolean;
+    stripFrontMatter: boolean;
     order: number;
     marker: string;
 }

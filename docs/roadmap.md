@@ -2,6 +2,16 @@
 
 > 迭代方向，按优先级排列。编号沿用规划时的序号。原则：保持零依赖、单向只读注入的定位；不做记忆引擎功能（自动吸收、蒸馏、检索、模型侧写回）。
 
+## v0.3.0（已完成）
+
+| # | 项目 | 说明 |
+|---|------|------|
+| 3 | 目录支持 | `files` 元素可为目录，收集其中 `*.md`（字典序、跳过 dot 目录）；`dirDepth` 控制递归深度（默认 `1`=仅直属） |
+| 5 | front-matter 剥离 | 剥离文件头 YAML front-matter 块（未闭合不剥），先剥后截省预算 |
+| 6 | 注入新鲜度标记 | `freshness`（默认开）：快照头带生成时间、各文件头带最后修改时间 |
+| 7 | skipMissing 选项 | `skipMissing`（默认关）：缺失/不可读条目静默跳过——多设备路径不一致场景 |
+| 9 | install.mjs --uninstall/--update | 补卸载/更新路径 + 跨层 duplicate-id 预检（bundle 安装形态一并检出） |
+
 ## v0.2.0（已完成）
 
 | # | 项目 | 说明 |
@@ -30,11 +40,6 @@
 
 | # | 项目 | 说明 |
 |---|------|------|
-| 3 | 目录支持 | `files` 允许写目录，自动收集其中 `*.md`，可配递归深度上限 |
-| 5 | front-matter 剥离 | 剥掉文件头的 YAML front-matter 块，不白烧 token |
-| 6 | 注入新鲜度标记 | section 头部带快照生成时间与各文件 mtime，供模型判断记忆可能过时 |
-| 7 | skipMissing 选项 | 读取失败的文件静默跳过（多设备路径不一致场景），不注入错误文本 |
-| 9 | install.mjs --uninstall/--update | 补卸载/更新路径 + 跨层（home/profile）duplicate id 预检 |
 | 8 | npm publish 执行 | dsh.bundle 路线与三通道已就绪（v0.2.0）；待 npm 登录后 `npm publish`，随后提交社区目录收录（dshbase / Oh-My-DSH） |
 
 ## 明确不做

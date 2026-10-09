@@ -7,8 +7,9 @@
 //
 // Install model: local file copy referencing the plugin via a file:/// URL in
 // the cordis patch. This is the zero-dependency path (no registry, no `dsh
-// plugin add`). A future npm publish is possible (see package.json) — the
-// docs/architecture.md "npm publishing" section weighs both options.
+// plugin add`). The dsh.bundle path (repo-root cordis.patch.yml, `dsh plugin
+// add`) is equally supported — pick one; installing both at once hits
+// `duplicate loader entry id`.
 //
 // Usage:
 //   node install.mjs                  # home-level (all profiles)
@@ -16,7 +17,10 @@
 //   node install.mjs --yes            # skip confirmation
 //   node install.mjs --verify         # also run `dsh --dump-config` sanity check
 //   node install.mjs --files A.md,B.md   # initial memory files for config
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+//   node install.mjs --update         # refresh plugin files, keep patch config
+//   node install.mjs --uninstall      # remove plugin files + patch entry
+//   node install.mjs --force          # skip the cross-layer duplicate-id precheck
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -38,6 +42,9 @@ const opt = {
   yes: false,
   verify: false,
   files: [],
+  uninstall: false,
+  update: false,
+  force: false,
 }
 for (let i = 0; i < args.length; i++) {
   const a = args[i]
@@ -45,7 +52,14 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--yes') { opt.yes = true }
   else if (a === '--verify') { opt.verify = true }
   else if (a === '--files') { opt.files = String(args[++i] ?? '').split(',').map(s => s.trim()).filter(Boolean) }
+  else if (a === '--uninstall') { opt.uninstall = true }
+  else if (a === '--update') { opt.update = true }
+  else if (a === '--force') { opt.force = true }
   else { console.error(`unknown arg: ${a}`); process.exit(2) }
+}
+if (opt.uninstall && opt.update) {
+  console.error('ERROR: --uninstall and --update are mutually exclusive')
+  process.exit(2)
 }
 
 // ---- locate DSH_HOME ----
@@ -101,6 +115,103 @@ function buildEntry() {
   ].join('\n')
 }
 
+// ---- cross-layer duplicate-id precheck ----
+// The same loader entry id installed at two layers makes `dsh` boot fail with
+// `duplicate loader entry id`. Before writing, scan every *other* layer that
+// could hold a memory-snapshot entry.
+function scanLayerPatches() {
+  const candidates = []
+  const homePatch = join(dshHome, 'cordis.patch.yml')
+  if (patchTarget !== homePatch) candidates.push({ layer: 'home', path: homePatch })
+  const profilesDir = join(dshHome, 'profiles')
+  if (existsSync(profilesDir)) {
+    for (const name of readdirProfiles(profilesDir)) {
+      if (opt.profile === name) continue
+      candidates.push({ layer: `profile:${name}`, path: join(profilesDir, name, 'cordis.patch.yml') })
+      candidates.push({ layer: `profile:${name} (bundle)`, path: join(profilesDir, name, 'package.json') })
+    }
+  }
+  const hits = []
+  for (const c of candidates) {
+    if (!existsSync(c.path)) continue
+    let text
+    try { text = readFileSync(c.path, 'utf-8') } catch { continue }
+    // Patch files carry `id: memory-snapshot`; a profile's package.json carries
+    // the bundle/dependency name (bundle installs never touch the patch text).
+    // Either form means the entry exists at that layer.
+    if (c.path.endsWith('package.json')) {
+      if (text.includes(PLUGIN_NAME)) hits.push(c)
+    } else if (text.includes(`id: ${ENTRY_ID}`) && text.includes(PLUGIN_NAME)) {
+      hits.push(c)
+    }
+  }
+  return hits
+}
+function readdirProfiles(dir) {
+  try { return readdirSync(dir) } catch { return [] }
+}
+
+function precheckOrExit() {
+  if (opt.force) return
+  const conflicting = scanLayerPatches()
+  if (!conflicting.length) return
+  console.error('\nERROR: memory-snapshot is already installed at another layer:')
+  for (const c of conflicting) console.error(`  - ${c.layer}  (${c.path})`)
+  console.error('\nThe same loader id at two layers makes `dsh` boot fail with `duplicate loader entry id`.')
+  console.error('Pick one:')
+  console.error('  1) remove the other copy first — `dsh plugin --profile <name> remove dsh-memory-snapshot`')
+  console.error('     (bundle install) or `node install.mjs [--profile <name>] --uninstall` (file-copy install)')
+  console.error('  2) re-run with --force to skip this precheck')
+  process.exit(2)
+}
+
+// ---- locate OUR entry block inside a patch file ----
+// Primary form: a marker comment line ("# dsh-memory-snapshot — added by
+// install.mjs") followed by the `- insert:` block. Fallback: any top-level
+// block mentioning both the entry id and the plugin name (hand-written or
+// older installs).
+function findEntryBlock(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trimStart()
+    if (t.startsWith('#') && t.includes(PLUGIN_NAME)) {
+      let j = i + 1
+      let sawEntry = false
+      while (j < lines.length) {
+        const l = lines[j]
+        if (l.startsWith('- ')) {
+          if (sawEntry) break
+          sawEntry = true
+          j++
+          continue
+        }
+        if (/^[ \t]/.test(l) || l.trim() === '') { j++; continue }
+        break
+      }
+      return { start: i, end: j - 1 }
+    }
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('- ')) {
+      let j = i + 1
+      while (j < lines.length && /^[ \t]/.test(lines[j])) j++
+      const block = lines.slice(i, j).join('\n')
+      if (block.includes(`id: ${ENTRY_ID}`) && block.includes(PLUGIN_NAME)) return { start: i, end: j - 1 }
+    }
+  }
+  return null
+}
+
+function removeEntryFromPatch() {
+  if (!existsSync(patchTarget)) return 'no-file'
+  const text = readFileSync(patchTarget, 'utf-8')
+  const lines = text.split('\n')
+  const block = findEntryBlock(lines)
+  if (!block) return 'not-found'
+  lines.splice(block.start, block.end - block.start + 1)
+  writeFileSync(patchTarget, lines.join('\n'), 'utf-8')
+  return 'removed'
+}
+
 // ---- merge into existing patch (never clobber user content) ----
 // "Effectively empty" means: whitespace, YAML comments, and/or the empty flow
 // array `[]` (dsh writes that placeholder in a fresh profile patch). Treating
@@ -130,22 +241,8 @@ function mergePatch(patchPath, entry) {
   return 'appended'
 }
 
-// ---- main ----
-async function main() {
-  console.log(`DSH_HOME      : ${dshHome}`)
-  console.log(`plugin target : ${pluginTarget}`)
-  console.log(`patch target  : ${patchTarget}${opt.profile ? ` (profile: ${opt.profile})` : ' (all profiles)'}`)
-
-  if (!yesAll) {
-    const ok = await ask('Continue?')
-    if (!ok) { console.log('aborted'); process.exit(1) }
-  }
-
-  if (!existsSync(SOURCE_FILE)) {
-    console.error(`ERROR: build output missing: ${SOURCE_FILE}`)
-    console.error('Run `npm run build` (or `tsc -p tsconfig.json`) first.')
-    process.exit(1)
-  }
+// ---- deploy plugin files (index.js + a minimal ESM package.json) ----
+function deployFiles() {
   mkdirSync(pluginDir, { recursive: true })
   copyFileSync(SOURCE_FILE, pluginTarget)
   // write a minimal package.json so Node treats index.js as ESM (avoids MODULE_TYPELESS_PACKAGE_JSON warning)
@@ -160,25 +257,84 @@ async function main() {
     main: 'index.js',
   }, null, 2)
   writeFileSync(pkgPath, pkgContent + '\n', 'utf-8')
-  console.log(`copied index.js + package.json -> ${pluginDir}/`)
+  return ownPkg.version
+}
 
-  const result = mergePatch(patchTarget, buildEntry())
-  const resultMsg = {
-    created: 'patch file created',
-    'replaced-empty': 'patch file was empty, now contains memory-snapshot',
-    appended: 'memory-snapshot entry appended to existing patch (user content preserved)',
-    already: 'memory-snapshot already installed — nothing changed',
-  }[result]
-  console.log(`patch        : ${resultMsg}`)
+// ---- main ----
+async function main() {
+  console.log(`DSH_HOME      : ${dshHome}`)
+  console.log(`plugin target : ${pluginTarget}`)
+  console.log(`patch target  : ${patchTarget}${opt.profile ? ` (profile: ${opt.profile})` : ' (all profiles)'}`)
+  if (opt.uninstall) console.log('mode          : uninstall')
+  if (opt.update) console.log('mode          : update (refresh plugin files, keep patch config)')
 
-  if (result === 'appended') {
-    console.log('NOTE: existing patch content was preserved; verify order of entries is valid YAML.')
+  if (!yesAll) {
+    const ok = await ask('Continue?')
+    if (!ok) { console.log('aborted'); process.exit(1) }
   }
 
-  console.log('\nNext: configure memory files & verify')
-  console.log('  1. Edit config in the patch file above (files / maxBytes / order / marker)')
-  console.log('  2. Run:  dsh --profile headless --dump-config | grep memory-snapshot')
-  console.log('  3. Run:  dsh --profile headless "check your memory snapshot and answer: what files did it read?"')
+  if (opt.uninstall) {
+    let filesRemoved = false
+    if (existsSync(pluginTarget)) { rmSync(pluginTarget, { force: true }); filesRemoved = true }
+    const pkgPath = join(pluginDir, 'package.json')
+    if (existsSync(pkgPath)) { rmSync(pkgPath, { force: true }); filesRemoved = true }
+    try { rmdirSync(pluginDir) } catch { /* non-empty or missing: leave the directory */ }
+    const result = removeEntryFromPatch()
+    const msg = {
+      removed: 'memory-snapshot entry removed',
+      'not-found': 'no memory-snapshot entry found (patch already clean)',
+      'no-file': 'patch file does not exist (nothing to remove)',
+    }[result]
+    console.log(`plugin files : ${filesRemoved ? 'removed' : 'not present'}`)
+    console.log(`patch        : ${msg}`)
+    const others = scanLayerPatches()
+    if (others.length) {
+      console.log('note         : memory-snapshot is also present at:')
+      for (const c of others) console.log(`  - ${c.layer}  (${c.path})`)
+      console.log('               (left untouched — remove separately if unwanted)')
+    }
+    console.log('\nDone.')
+    return
+  }
+
+  if (!existsSync(SOURCE_FILE)) {
+    console.error(`ERROR: build output missing: ${SOURCE_FILE}`)
+    console.error('Run `npm run build` (or `tsc -p tsconfig.json`) first.')
+    process.exit(1)
+  }
+
+  if (opt.update) {
+    if (!existsSync(pluginTarget)) {
+      console.error('ERROR: nothing installed to update — run `node install.mjs` first')
+      process.exit(2)
+    }
+    const version = deployFiles()
+    console.log(`updated      : plugin files refreshed (v${version}) — patch config untouched`)
+    const hasEntry = existsSync(patchTarget) && readFileSync(patchTarget, 'utf-8').includes(`id: ${ENTRY_ID}`)
+    if (!hasEntry) console.log('note         : memory-snapshot entry not found in the patch — run `node install.mjs` to add it')
+  } else {
+    precheckOrExit()
+    const version = deployFiles()
+    console.log(`copied index.js + package.json (v${version}) -> ${pluginDir}/`)
+
+    const result = mergePatch(patchTarget, buildEntry())
+    const resultMsg = {
+      created: 'patch file created',
+      'replaced-empty': 'patch file was empty, now contains memory-snapshot',
+      appended: 'memory-snapshot entry appended to existing patch (user content preserved)',
+      already: 'memory-snapshot already installed — nothing changed',
+    }[result]
+    console.log(`patch        : ${resultMsg}`)
+
+    if (result === 'appended') {
+      console.log('NOTE: existing patch content was preserved; verify order of entries is valid YAML.')
+    }
+
+    console.log('\nNext: configure memory files & verify')
+    console.log('  1. Edit config in the patch file above (files / maxBytes / order / marker)')
+    console.log('  2. Run:  dsh --profile headless --dump-config | grep memory-snapshot')
+    console.log('  3. Run:  dsh --profile headless "check your memory snapshot and answer: what files did it read?"')
+  }
 
   if (opt.verify) {
     // 1. syntax-check the installed plugin before booting dsh.

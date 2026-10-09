@@ -22,10 +22,11 @@ Of course you could also tell dsh to read the files manually each time, but in h
 
 Does:
 
-- One or more md files, any directory (`~` supported), injected in full at every prompt assembly
+- One or more md files or **directories** (`~` supported), injected in full at every prompt assembly; directory entries collect their `*.md` files (`dirDepth` controls recursion)
 - Edits take effect next session
 - Per-file byte cap (`maxBytes`), truncated by UTF-8 bytes, rolled back to a line boundary, with a "truncated" marker; plus a combined budget (`totalMaxBytes`) so many files together can't blow up the system prompt
-- Unreadable files are reported with the reason; the session never crashes
+- Leading YAML front-matter is stripped (`stripFrontMatter`); the snapshot header carries its build time and each file its mtime (`freshness`)
+- Unreadable files are reported with the reason (or skipped silently via `skipMissing`); the session never crashes
 - Injected content lands in the Trajectory log — you can always audit what the model received
 
 Doesn't (need these → look at the memory-engine plugins):
@@ -53,7 +54,7 @@ Uninstall: `dsh plugin --profile <your-profile> remove dsh-memory-snapshot`
 node install.mjs        # one command: locate DSH_HOME, copy the plugin, write config
 ```
 
-> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install.
+> Other options: `--profile headless` installs into one profile only; `--files A.md,B.md` also configures the memory files; `--verify` runs a self-check after install; `--update` refreshes plugin files only (keeps your config); `--uninstall` removes the files and the config entry; a cross-layer duplicate entry blocks installs (`--force` skips the precheck).
 
 ## Usage
 
@@ -67,9 +68,13 @@ To change memory sources, edit `files` under the `memory-snapshot` entry in `~/.
 
 Common config:
 
-- `files`: list of document paths, default `['./MEMORY.md']`, multiple allowed. **For cross-workspace effect use absolute paths or `~`** — relative paths resolve against dsh's launch directory, so each workspace ends up looking for its own copy
+- `files`: list of paths (files or directories), default `['./MEMORY.md']`, multiple allowed; directories collect their `*.md` children. **For cross-workspace effect use absolute paths or `~`** — relative paths resolve against dsh's launch directory, so each workspace ends up looking for its own copy
 - `maxBytes`: per-file injection cap, default 3000 bytes (truncated by UTF-8 bytes, never splitting a multi-byte character, rolled back to a line boundary)
 - `totalMaxBytes`: combined injection cap across all files, default `0` (no combined cap). When exceeded, files are skipped in `files` order and noted at the end
+- `dirDepth`: directory recursion depth, default `1` (direct children only; `2` includes one subdirectory level). Dot-directories are skipped
+- `skipMissing`: default `false` (missing entries are listed in a footnote); `true` skips them silently — for machines with different path layouts
+- `freshness`: default `true` — the snapshot header carries its build time and every file header carries the file's mtime; `false` disables
+- `stripFrontMatter`: default `true` — leading YAML front-matter blocks are stripped (unclosed blocks are kept); `false` preserves them
 - `order`: section order, default 50
 - `marker`: marker prefix, default `MEMORY-SNAPSHOT`
 
@@ -82,7 +87,7 @@ A function-style Cordis plugin: `inject = ['systemPrompt']` declares the injecti
 ## Test
 
 ```bash
-npm test                # 40 automated tests (including a real dsh session)
+npm test                # 66 automated tests (unit 54 + e2e 12; live-session cases skip without credentials)
 ```
 
 Manual acceptance (optional, full 7 steps in [tests/MANUAL-TEST.md](tests/MANUAL-TEST.md)):
